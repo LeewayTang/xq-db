@@ -57,7 +57,7 @@ def review_batch(conn, batch_id: str, corpus_dir: Path) -> BatchReport:
             candidates.discard(edition_id)
             known = {key: signatures[key] for key in candidates} or None
 
-        findings = check_text(text, known_hashes=known)
+        findings = check_text(text, known_hashes=known, signature=signature)
         quality = grade(findings, text)
 
         conn.execute(

@@ -16,6 +16,7 @@ def check_text(
     text: str,
     *,
     known_hashes: dict[str, str] | None = None,
+    signature: str | None = None,
 ) -> list[Finding]:
     findings: list[Finding] = []
     total = max(len(text), 1)
@@ -44,9 +45,9 @@ def check_text(
             "truncated", "warn", f"ends with {stripped[-1]!r}"))
 
     if known_hashes:
-        signature = simhash64(text)
+        current = signature or simhash64(text)
         for other_id, other in known_hashes.items():
-            if hamming(signature, other) <= 3:
+            if hamming(current, other) <= 3:
                 findings.append(Finding(
                     "high_duplication", "warn", f"near {other_id}"))
                 break

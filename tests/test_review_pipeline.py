@@ -74,3 +74,30 @@ def test_duplicate_detection_wired(tmp_path):
     kinds = {finding.kind for result in rep.results
              for finding in result.findings}
     assert "high_duplication" in kinds
+
+
+def test_duplicate_detection_ignores_frontmatter(tmp_path):
+    from xqdb.normalize.simhash import simhash64
+
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    _seed(conn, 2)
+    (tmp_path / "corpus").mkdir()
+    body = "左传隐公元年郑伯克段于鄢" * 30
+    signature = simhash64(body)
+    for i in range(2):
+        text = (
+            "---\n"
+            f"id: e:{i}\n"
+            f"sha256: {'a' * 62}{i}\n"
+            "---\n\n"
+            f"{body}"
+        )
+        (tmp_path / "corpus" / f"{i}.md").write_text(text, encoding="utf-8")
+    conn.execute("update edition set simhash = ?", (signature,))
+    conn.commit()
+
+    rep = review_batch(conn, "b1", tmp_path / "corpus")
+    kinds = {finding.kind for result in rep.results
+             for finding in result.findings}
+    assert "high_duplication" in kinds
