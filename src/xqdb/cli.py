@@ -1,11 +1,17 @@
 import argparse
 import hashlib
 import json
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
 from . import __version__
 from .config import load_config
+from .harness.budget import Budget
+from .harness.client import AnthropicClient
+from .harness.config import load_agent_config
+from .harness.roles import load_roles
+from .harness.runner import Runner
 from .index.fts import rebuild_fts, search
 from .ingest.daizhige import enumerate_corpus, fetch_repo
 from .normalize.ids import edition_id, passage_id, section_id, work_id
@@ -16,6 +22,8 @@ from .review.pipeline import review_batch
 from .space.place import resolve_place
 from .space.query import passages_in_time, passages_near
 from .store.db import connect, init_db
+from .tools.context import tool_context
+from .tools.registry import TOOL_SPECS
 
 DAIZHIGE_URL = "https://github.com/garychowcmu/daizhigev20"
 DEFAULT_SOURCES = {
@@ -76,6 +84,19 @@ def build_parser() -> argparse.ArgumentParser:
     when = sub.add_parser("when", parents=[common], help="按时间范围检索")
     when.add_argument("start", type=int)
     when.add_argument("end", type=int)
+
+    sub.add_parser("tools", parents=[common], help="列出可用工具")
+
+    agent = sub.add_parser("agent", parents=[common], help="Agent 角色与运行")
+    agent_sub = agent.add_subparsers(dest="agent_command", required=True)
+    agent_sub.add_parser("roles", help="列出角色")
+    run = agent_sub.add_parser("run", help="运行角色")
+    run.add_argument("--role", required=True)
+    run.add_argument("--task", required=True)
+    run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--max-tokens", type=int)
+    run.add_argument("--max-tool-calls", type=int)
+    run.add_argument("--max-cost", type=float)
 
     return parser
 
@@ -344,6 +365,62 @@ def cmd_when(args) -> int:
     return 0
 
 
+def cmd_tools(args) -> int:
+    for name, spec in TOOL_SPECS.items():
+        if not spec.admin:
+            print(f"{name}: {spec.description}")
+    return 0
+
+
+def cmd_agent(args) -> int:
+    cfg = load_agent_config(Path(args.root) if args.root else None)
+    roles = load_roles(cfg.agents_dir, schemas_dir=cfg.schemas_dir)
+
+    if args.agent_command == "roles":
+        for role in roles.values():
+            print(f"{role.name}: tools={len(role.tools)} "
+                  f"budget=${role.max_cost_usd:.2f} tokens={role.max_tokens}")
+        return 0
+
+    role = roles.get(args.role)
+    if role is None:
+        print(f"unknown role: {args.role}")
+        return 1
+
+    if args.dry_run:
+        print(json.dumps({
+            "role": role.name,
+            "tools": list(role.tools),
+            "budget": {
+                "max_tokens": role.max_tokens,
+                "max_tool_calls": role.max_tool_calls,
+                "max_cost_usd": role.max_cost_usd,
+            },
+            "prompt": role.prompt,
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set; export it or use --dry-run")
+        return 1
+
+    budget = Budget(
+        max_tokens=args.max_tokens or role.max_tokens,
+        max_tool_calls=args.max_tool_calls or role.max_tool_calls,
+        max_cost_usd=(args.max_cost if args.max_cost is not None
+                      else role.max_cost_usd),
+    )
+    root = Path(args.root) if args.root else None
+    with tool_context(root) as ctx:
+        result = Runner(
+            role, TOOL_SPECS, AnthropicClient(cfg.model), budget,
+            cfg.runs_dir, ctx=ctx).run(args.task)
+    print(result.output)
+    print(f"status={result.status} citations={result.citations} "
+          f"log={result.log_path}")
+    return 0 if result.status == "ok" else 1
+
+
 def cmd_release(args) -> int:
     cfg = _cfg(args)
     out = build_release(cfg.root, args.tag)
@@ -363,6 +440,8 @@ COMMANDS = {
     "place": cmd_place,
     "near": cmd_near,
     "when": cmd_when,
+    "tools": cmd_tools,
+    "agent": cmd_agent,
 }
 
 

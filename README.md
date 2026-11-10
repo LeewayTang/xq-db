@@ -79,5 +79,26 @@ python3 -m pytest -q
 python3 -m ruff check src tests
 ```
 
+## 工具层与 Agent
+
+工具层通过 MCP 暴露给 Claude Code 等客户端（`mcp` 是可选依赖）：
+
+```bash
+pip install -e ".[mcp]"
+xqdb tools                 # 列出非管理工具
+xqdb-mcp --root .          # stdio MCP server
+xqdb-mcp --root . --allow-admin   # 额外暴露 ingest_run
+```
+
+Agent 角色定义在 `agents/`，工具白名单与预算写在角色 frontmatter 里：
+
+```bash
+xqdb agent roles
+xqdb agent run --role researcher --task "查郑伯克段的史料" --dry-run
+ANTHROPIC_API_KEY=... xqdb agent run --role researcher --task "..."
+```
+
+真实运行受 token、工具调用次数和费用三重上限约束，日志写入 `data/runs/`。
+
 设计文档：`docs/superpowers/specs/2026-11-10-xianqin-corpus-harness-design.md`
 实施计划：`docs/superpowers/plans/2026-11-10-xqdb-p0-corpus-pipeline.md`

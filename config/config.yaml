@@ -4,3 +4,10 @@
 # corpus_dir: data/corpus
 # knowledge_dir: data/knowledge
 # db_path: data/xq_index.db
+
+agent:
+  model: claude-sonnet-5-5
+  monthly_budget_usd: 20
+  runs_dir: data/runs
+  agents_dir: agents
+  schemas_dir: schemas/agents

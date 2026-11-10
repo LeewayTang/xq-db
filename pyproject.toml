@@ -21,6 +21,7 @@ mcp = ["mcp>=1.0,<2"]
 
 [project.scripts]
 xqdb = "xqdb.cli:main"
+xqdb-mcp = "xqdb.mcp_server.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
