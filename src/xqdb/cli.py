@@ -142,8 +142,7 @@ def cmd_ingest(args) -> int:
     if args.source == "wikisource":
         import httpx
 
-        with httpx.Client(timeout=60, follow_redirects=True,
-                          headers={"User-Agent": "xqdb/0.1"}) as client:
+        with httpx.Client(timeout=60, follow_redirects=True) as client:
             pages = fetch_pages(CORE_TITLES, client)
         files = write_pages(pages, cfg.raw_dir)
         print(f"ingested {len(files)} pages from wikisource")

@@ -7,6 +7,7 @@ from .daizhige import enumerate_corpus
 
 API = "https://zh.wikisource.org/w/api.php"
 BATCH = 50
+USER_AGENT = "xqdb/0.1 (https://github.com/LeewayTang/xq-db)"
 
 CORE_TITLES = [
     "左传",
@@ -78,8 +79,9 @@ def fetch_pages(titles: list[str], client) -> list[WikiPage]:
             "rvslots": "main",
             "format": "json",
             "formatversion": "2",
+            "redirects": "1",
             "titles": "|".join(chunk),
-        })
+        }, headers={"User-Agent": USER_AGENT})
         response.raise_for_status()
         pages.extend(parse_response(response.json()))
     return pages

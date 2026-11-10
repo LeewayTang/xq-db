@@ -3,7 +3,9 @@ from pathlib import Path
 
 from xqdb.ingest.wikisource import (
     CORE_TITLES,
+    USER_AGENT,
     WikiPage,
+    fetch_pages,
     parse_response,
     strip_wikitext,
     write_pages,
@@ -44,3 +46,25 @@ def test_write_pages_creates_manifest(tmp_path):
 def test_write_pages_sanitises_slashes(tmp_path):
     write_pages([WikiPage("甲/乙", "正文")], tmp_path)
     assert (tmp_path / "wikisource" / "甲_乙.txt").exists()
+
+
+def test_fetch_pages_sets_ua_and_follows_redirects():
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"query": {"pages": []}}
+
+    class Client:
+        def __init__(self):
+            self.kwargs = {}
+
+        def get(self, url, **kwargs):
+            self.kwargs = kwargs
+            return Response()
+
+    client = Client()
+    fetch_pages(["论语"], client)
+    assert client.kwargs["params"]["redirects"] == "1"
+    assert USER_AGENT in client.kwargs["headers"]["User-Agent"]
