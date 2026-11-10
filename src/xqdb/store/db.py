@@ -5,7 +5,7 @@ SCHEMA_VERSION = "1"
 
 
 def _schema_path() -> Path:
-    path = Path(__file__).resolve().parents[3] / "schemas" / "schema.sql"
+    path = Path(__file__).resolve().parents[1] / "schema.sql"
     if not path.exists():
         raise FileNotFoundError(f"schema not found: {path}")
     return path

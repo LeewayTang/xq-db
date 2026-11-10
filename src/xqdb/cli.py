@@ -7,7 +7,7 @@ from . import __version__
 from .config import load_config
 from .index.fts import rebuild_fts, search
 from .ingest.daizhige import enumerate_corpus, fetch_repo
-from .normalize.ids import passage_id, section_id
+from .normalize.ids import edition_id, passage_id, section_id, work_id
 from .normalize.pipeline import normalize_file
 from .normalize.simplify import to_simplified
 from .release import build_release
@@ -44,6 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     normalize = sub.add_parser("normalize", parents=[common], help="规范化文本")
     normalize.add_argument("--batch", default="default")
+    normalize.add_argument("--force", action="store_true",
+                           help="覆盖已存在的版本")
 
     review = sub.add_parser("review", parents=[common], help="审核并分级")
     review.add_argument("--batch", default="default")
@@ -174,14 +176,31 @@ def cmd_normalize(args) -> int:
     entries = [json.loads(line) for line in
                manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
     _ensure_source(conn, "daizhige")
+
+    existing = {row[0] for row in conn.execute("select id from edition")}
+    normalized = skipped = errors = 0
+
     for entry in entries:
-        result = normalize_file(
-            Path(entry["raw_path"]), entry["rel_path"], "daizhige", cfg.corpus_dir)
+        rel_path = entry["rel_path"]
+        expected_id = edition_id(work_id(Path(rel_path).stem), "daizhige")
+        if expected_id in existing and not args.force:
+            skipped += 1
+            continue
+        try:
+            result = normalize_file(
+                Path(entry["raw_path"]), rel_path, "daizhige", cfg.corpus_dir)
+        except Exception as exc:  # noqa: BLE001 - keep the batch alive
+            errors += 1
+            print(f"failed {rel_path}: {exc}")
+            continue
         _persist(conn, result, args.batch, cfg)
+        existing.add(expected_id)
+        normalized += 1
+
     conn.commit()
     conn.close()
-    print(f"normalized {len(entries)} files")
-    return 0
+    print(f"normalized {normalized}, skipped {skipped}, failed {errors}")
+    return 1 if errors else 0
 
 
 def cmd_review(args) -> int:

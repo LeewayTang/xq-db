@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,12 +33,31 @@ def review_batch(conn, batch_id: str, corpus_dir: Path) -> BatchReport:
     now = datetime.now(UTC).isoformat()
     results: list[ReviewResult] = []
 
+    signatures = {
+        row["id"]: row["simhash"]
+        for row in conn.execute(
+            "select id, simhash from edition where simhash is not null")
+    }
+    bands: dict[tuple[int, str], set[str]] = defaultdict(set)
+    for edition_key, signature in signatures.items():
+        for band in range(4):
+            bands[(band, signature[band * 4:(band + 1) * 4])].add(edition_key)
+
     for row in rows:
         edition_id = row["id"]
         path = corpus_dir / (row["path"] or "")
         text = path.read_text(encoding="utf-8") if path.exists() else ""
 
-        findings = check_text(text)
+        known = None
+        signature = signatures.get(edition_id)
+        if signature:
+            candidates: set[str] = set()
+            for band in range(4):
+                candidates |= bands[(band, signature[band * 4:(band + 1) * 4])]
+            candidates.discard(edition_id)
+            known = {key: signatures[key] for key in candidates} or None
+
+        findings = check_text(text, known_hashes=known)
         quality = grade(findings, text)
 
         conn.execute(

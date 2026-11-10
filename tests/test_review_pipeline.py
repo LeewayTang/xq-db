@@ -55,3 +55,22 @@ def test_missing_file_does_not_crash(tmp_path):
     rep = review_batch(conn, "b1", tmp_path / "corpus")
     assert rep.total == 1
     assert rep.results[0].quality_grade == "C"
+
+
+def test_duplicate_detection_wired(tmp_path):
+    from xqdb.normalize.simhash import simhash64
+
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    _seed(conn, 2)
+    (tmp_path / "corpus").mkdir()
+    text = "左传隐公元年郑伯克段于鄢" * 30
+    for i in range(2):
+        (tmp_path / "corpus" / f"{i}.md").write_text(text, encoding="utf-8")
+    conn.execute("update edition set simhash = ?", (simhash64(text),))
+    conn.commit()
+
+    rep = review_batch(conn, "b1", tmp_path / "corpus")
+    kinds = {finding.kind for result in rep.results
+             for finding in result.findings}
+    assert "high_duplication" in kinds

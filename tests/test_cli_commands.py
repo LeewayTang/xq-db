@@ -104,3 +104,54 @@ def test_release_command(tmp_path):
     _pipeline(tmp_path)
     assert main(["--root", str(tmp_path), "release", "--tag", "data-v0.1.0"]) == 0
     assert (tmp_path / "dist" / "data-v0.1.0" / "MANIFEST.json").exists()
+
+
+def test_normalize_skips_existing_without_force(tmp_path):
+    db = _pipeline(tmp_path)
+    conn = connect(db)
+    conn.execute("update edition set char_count = 999")
+    conn.commit()
+    conn.close()
+
+    assert main(["--root", str(tmp_path), "normalize"]) == 0
+    conn = connect(db)
+    assert conn.execute("select char_count from edition").fetchone()[0] == 999
+    conn.close()
+
+    assert main(["--root", str(tmp_path), "normalize", "--force"]) == 0
+    conn = connect(db)
+    assert conn.execute("select char_count from edition").fetchone()[0] != 999
+
+
+def test_normalize_continues_after_missing_file(tmp_path):
+    _project(tmp_path)
+    repo = _raw_tree(tmp_path)
+    assert main(["--root", str(tmp_path), "init"]) == 0
+    assert main(["--root", str(tmp_path), "ingest", "daizhige",
+                 "--path", str(repo)]) == 0
+
+    manifest = tmp_path / "data" / "raw" / "daizhige" / "manifest.jsonl"
+    line = manifest.read_text(encoding="utf-8").strip()
+    missing = line.replace("春秋左传.txt", "缺失.txt")
+    manifest.write_text(line + "\n" + missing + "\n", encoding="utf-8")
+
+    assert main(["--root", str(tmp_path), "normalize"]) == 1
+    conn = connect(tmp_path / "data" / "xq_index.db")
+    assert conn.execute("select count(*) from edition").fetchone()[0] == 1
+
+
+def test_catalog_prefers_best_grade(tmp_path):
+    import json
+
+    db = _pipeline(tmp_path)
+    conn = connect(db)
+    work_id = conn.execute("select id from work").fetchone()[0]
+    conn.execute(
+        "insert into edition(id,work_id,source_id,quality_grade) "
+        "values('e:q',?,'daizhige','Q')", (work_id,))
+    conn.commit()
+
+    out = tmp_path / "works.jsonl"
+    build_index_jsonl(conn, out)
+    row = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
+    assert row["best_grade"] == "A"

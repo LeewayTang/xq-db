@@ -38,3 +38,15 @@ def test_result_is_deterministic_and_has_simhash(tmp_path):
     second = normalize_file(raw, "儒藏/四书/论语.txt", "daizhige", tmp_path / "corpus")
     assert first.edition_id == second.edition_id
     assert len(first.simhash) == 16 and len(first.sha256) == 64
+
+
+def test_same_title_different_paths_do_not_collide(tmp_path):
+    first_raw = tmp_path / "a.txt"
+    second_raw = tmp_path / "b.txt"
+    first_raw.write_text("　　甲书正文。\n", encoding="utf-8")
+    second_raw.write_text("　　乙书正文。\n", encoding="utf-8")
+    first = normalize_file(
+        first_raw, "子藏/甲/同名.txt", "daizhige", tmp_path / "corpus")
+    second = normalize_file(
+        second_raw, "子藏/乙/同名.txt", "daizhige", tmp_path / "corpus")
+    assert first.path != second.path

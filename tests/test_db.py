@@ -1,7 +1,9 @@
 import sqlite3
+from pathlib import Path
 
 import pytest
 
+import xqdb
 from xqdb.store.db import SCHEMA_VERSION, connect, init_db
 
 
@@ -29,3 +31,9 @@ def test_foreign_keys_enforced(tmp_path):
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(
             "insert into edition(id, work_id, source_id) values('e:x','w:none','s:none')")
+
+
+def test_packaged_schema_matches_source():
+    packaged = Path(xqdb.__file__).with_name("schema.sql")
+    source = Path(__file__).resolve().parents[1] / "schemas" / "schema.sql"
+    assert packaged.read_bytes() == source.read_bytes()

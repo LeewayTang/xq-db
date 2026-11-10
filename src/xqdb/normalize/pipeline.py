@@ -49,7 +49,9 @@ def normalize_file(
     char_count = sum(1 for ch in body if not ch.isspace())
     digest = simhash64(body)
 
-    out_path = corpus_dir / source / f"{slugify_title(title)}.md"
+    out_path = corpus_dir / source / (
+        f"{slugify_title(title)}-"
+        f"{hashlib.sha1(rel_path.encode('utf-8')).hexdigest()[:8]}.md")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     meta = {
