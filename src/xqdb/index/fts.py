@@ -118,7 +118,7 @@ def search(
         )
         select section_id, work, section, score
         from ranked where rn = 1
-        order by grade_rank, score
+        order by score, grade_rank
         limit ?
     """
     params.append(limit)

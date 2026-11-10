@@ -123,6 +123,35 @@ def test_search_returns_matching_passage_inside_section(tmp_path):
     assert hits[0].passage_id == "p:z:1:002"
 
 
+def test_ranking_is_relevance_first_across_works(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    conn.execute(
+        "insert into source(id,name,url,license,trust) "
+        "values('s','s','u','x','secondary')")
+    for wid, title, grade in (("w:a", "甲书", "A"), ("w:b", "乙书", "B")):
+        conn.execute("insert into work(id,title) values(?,?)", (wid, title))
+        conn.execute(
+            "insert into edition(id,work_id,source_id,char_count,quality_grade) "
+            "values(?,?,'s',10,?)", (f"e:{wid}", wid, grade))
+        conn.execute(
+            "insert into section(id,edition_id,idx,title,level) "
+            "values(?,?,1,'章',1)", (f"s:{wid}", f"e:{wid}"))
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:a:001','s:w:a',1,?,?,0)",
+        ("郑伯克段" + "无关" * 300, "郑伯克段" + "无关" * 300))
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:b:001','s:w:b',1,'郑伯克段郑伯克段郑伯克段',"
+        "'郑伯克段郑伯克段郑伯克段',12)")
+    conn.commit()
+    rebuild_fts(conn)
+
+    hits = search(conn, "郑伯克段")
+    assert hits[0].work == "乙书"
+
+
 def test_dedupe_prefers_higher_grade(tmp_path):
     conn = connect(tmp_path / "x.db")
     init_db(conn)

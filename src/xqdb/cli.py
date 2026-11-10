@@ -268,7 +268,7 @@ def cmd_index(args) -> int:
     _, conn = _connect(args)
     count = rebuild_fts(conn)
     conn.close()
-    print(f"indexed {count} passages")
+    print(f"indexed {count} sections")
     return 0
 
 
