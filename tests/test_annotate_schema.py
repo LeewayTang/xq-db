@@ -58,3 +58,23 @@ def test_parse_strips_markdown_fence():
 def test_parse_rejects_non_json():
     with pytest.raises(AnnotationInvalid):
         parse_annotation("不是 JSON")
+
+
+def test_parse_extracts_fenced_json_with_prose():
+    text = 'Here is the JSON:\n```json\n{"entities": []}\n```\nDone.'
+    assert parse_annotation(text) == {"entities": []}
+
+
+def test_parse_extracts_braces_without_fence():
+    assert parse_annotation('result: {"entities": []} end') == {"entities": []}
+
+
+def test_init_migrates_legacy_event_table(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    conn.execute(
+        "create table event(id text primary key, name text not null, "
+        "date_text text, year_start integer, year_end integer, "
+        "confidence text, basis text, place_id text, summary text)")
+    init_db(conn)
+    columns = {row[1] for row in conn.execute("pragma table_info(event)")}
+    assert "passage_id" in columns

@@ -15,9 +15,7 @@ def _place_id(name: str) -> str:
 
 
 def _ensure_place(conn, name: str, type: str = "place") -> str:
-    place_id = _place_id(name)
-    upsert_place(conn, place_id, name, type)
-    return place_id
+    return upsert_place(conn, _place_id(name), name, type)
 
 
 def _add_name_once(conn, place_id: str, name: str, name_type: str) -> None:
@@ -31,6 +29,7 @@ def _add_name_once(conn, place_id: str, name: str, name_type: str) -> None:
 
 def persist_events(conn, chunk, payload: dict) -> int:
     _delete_for_passages(conn, "passage_time", "passage_id", chunk.passage_ids)
+    _delete_for_passages(conn, "event", "passage_id", chunk.passage_ids)
 
     written = 0
     for item in payload.get("events", []):
@@ -39,12 +38,12 @@ def persist_events(conn, chunk, payload: dict) -> int:
             continue
 
         event_id = _event_id(item["name"], passage_id)
-        conn.execute("delete from event where id = ?", (event_id,))
         conn.execute(
             "insert into event"
-            "(id, name, date_text, year_start, year_end, confidence, basis) "
-            "values (?, ?, ?, ?, ?, ?, ?)",
-            (event_id, item["name"], item.get("date_text"),
+            "(id, name, passage_id, date_text, year_start, year_end,"
+            " confidence, basis) "
+            "values (?, ?, ?, ?, ?, ?, ?, ?)",
+            (event_id, item["name"], passage_id, item.get("date_text"),
              item.get("year_start"), item.get("year_end"),
              item.get("confidence"), item.get("basis")),
         )
@@ -69,10 +68,9 @@ def persist_events(conn, chunk, payload: dict) -> int:
         if place_name:
             place_id = _ensure_place(conn, place_name)
             conn.execute(
-                "insert or replace into passage_place"
-                "(passage_id, place_id, role, confidence) "
-                "values (?, ?, 'event', ?)",
-                (passage_id, place_id, item.get("confidence")),
+                "insert or replace into event_place"
+                "(event_id, place_id, role, seq) values (?, ?, 'event', 0)",
+                (event_id, place_id),
             )
         written += 1
     return written

@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass
 from math import asin, cos, radians, sin, sqrt
 
@@ -18,7 +19,14 @@ class PlaceMatch:
 
 
 def upsert_place(conn, place_id: str, canonical_name: str,
-                 type: str | None = None) -> None:
+                 type: str | None = None) -> str:
+    existing = conn.execute(
+        "select canonical_name from place where id = ?", (place_id,)
+    ).fetchone()
+    if existing is not None and existing["canonical_name"] != canonical_name:
+        digest = hashlib.sha1(
+            canonical_name.encode("utf-8")).hexdigest()[:6]
+        place_id = f"{place_id}-{digest}"
     conn.execute(
         "insert into place(id, canonical_name, type) values (?, ?, ?) "
         "on conflict(id) do update set "
@@ -33,6 +41,7 @@ def upsert_place(conn, place_id: str, canonical_name: str,
         "  select 1 from place_name where place_id = ? and name = ?)",
         (place_id, canonical_name, place_id, canonical_name),
     )
+    return place_id
 
 
 def add_name(conn, place_id: str, name: str, name_type: str, *,

@@ -22,16 +22,14 @@ def validate_annotation(payload: dict, schema_path: Path) -> None:
 
 def parse_annotation(text: str) -> dict:
     text = text.strip()
-    if text.startswith("```"):
-        lines = text.splitlines()
-        if lines and lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end < start:
+        raise AnnotationInvalid("no JSON object found")
+    candidate = text[start:end + 1]
 
     try:
-        payload = json.loads(text)
+        payload = json.loads(candidate)
     except json.JSONDecodeError as exc:
         raise AnnotationInvalid(f"invalid JSON: {exc}") from exc
     if not isinstance(payload, dict):

@@ -34,3 +34,12 @@ def test_relation_to_unknown_name_creates_stub(ctx):
          "passage_id": "p:z:1:001", "evidence": "e"}]})
     assert n == 1
     assert ctx.conn.execute("select count(*) from entity").fetchone()[0] == 2
+
+
+def test_homophone_entities_do_not_collide(ctx):
+    persist_entities(ctx.conn, _chunk(), {"entities": [
+        {"passage_id": "p:z:1:001", "type": "person", "name": "郑庄公"},
+        {"passage_id": "p:z:1:001", "type": "person", "name": "郑庄恭"}]})
+    names = {
+        row[0] for row in ctx.conn.execute("select name from entity")}
+    assert names == {"郑庄公", "郑庄恭"}

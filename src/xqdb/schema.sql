@@ -109,12 +109,13 @@ CREATE TABLE IF NOT EXISTS relation (
 CREATE TABLE IF NOT EXISTS event (
     id         TEXT PRIMARY KEY,
     name       TEXT NOT NULL,
+    passage_id TEXT REFERENCES passage(id) ON DELETE CASCADE,
     date_text  TEXT,
     year_start INTEGER,
     year_end   INTEGER,
     confidence TEXT,
     basis      TEXT,
-    place_id   TEXT REFERENCES entity(id),
+    place_id   TEXT REFERENCES place(id),
     summary    TEXT
 );
 

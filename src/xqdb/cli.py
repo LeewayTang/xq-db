@@ -340,6 +340,8 @@ def cmd_review(args) -> int:
         if role is None:
             print("reviewer role not found")
             return 1
+        if _monthly_budget_exceeded(agent_cfg, role):
+            return 1
         budget = Budget(
             role.max_tokens, role.max_tool_calls, role.max_cost_usd)
         with tool_context(cfg.root) as ctx:
@@ -450,6 +452,15 @@ def cmd_tools(args) -> int:
     return 0
 
 
+def _monthly_budget_exceeded(agent_cfg, role) -> bool:
+    spent = month_to_date_cost(agent_cfg.runs_dir)
+    if spent + role.max_cost_usd > agent_cfg.monthly_budget_usd:
+        print(f"monthly budget exceeded: spent ${spent:.2f}, "
+              f"cap ${agent_cfg.monthly_budget_usd:.2f}")
+        return True
+    return False
+
+
 def cmd_agent(args) -> int:
     cfg = load_agent_config(Path(args.root) if args.root else None)
     roles = load_roles(cfg.agents_dir, schemas_dir=cfg.schemas_dir)
@@ -536,6 +547,9 @@ def cmd_annotate(args) -> int:
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
         print("ANTHROPIC_API_KEY is not set; export it or use --dry-run")
+        return 1
+
+    if _monthly_budget_exceeded(agent_cfg, role):
         return 1
 
     with tool_context(cfg.root) as ctx:

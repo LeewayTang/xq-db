@@ -21,6 +21,11 @@ def connect(path: Path) -> sqlite3.Connection:
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(_schema_path().read_text(encoding="utf-8"))
+    columns = {row[1] for row in conn.execute("pragma table_info(event)")}
+    if columns and "passage_id" not in columns:
+        conn.execute(
+            "alter table event add column passage_id text "
+            "references passage(id)")
     conn.execute(
         "INSERT OR IGNORE INTO index_meta(key, value) VALUES (?, ?)",
         ("schema_version", SCHEMA_VERSION),

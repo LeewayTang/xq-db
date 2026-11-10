@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 from ..normalize.ids import slugify_title
@@ -8,7 +9,14 @@ def entity_id(type: str, name: str) -> str:
 
 
 def upsert_entity(conn, item: dict) -> str:
-    eid = entity_id(item["type"], item["name"])
+    base = entity_id(item["type"], item["name"])
+    eid = base
+    existing = conn.execute(
+        "select name from entity where id = ?", (base,)).fetchone()
+    if existing is not None and existing["name"] != item["name"]:
+        digest = hashlib.sha1(
+            item["name"].encode("utf-8")).hexdigest()[:6]
+        eid = f"{base}-{digest}"
     alts = item.get("name_alt") or []
     name_alt = json.dumps(alts, ensure_ascii=False) if alts else None
     conn.execute(
@@ -33,9 +41,7 @@ def resolve_or_create(conn, name: str, type: str = "unknown") -> str:
     ).fetchone()
     if row is not None:
         return row["id"]
-    eid = entity_id(type, name)
-    upsert_entity(conn, {"type": type, "name": name})
-    return eid
+    return upsert_entity(conn, {"type": type, "name": name})
 
 
 def _delete_for_passages(conn, table: str, column: str,

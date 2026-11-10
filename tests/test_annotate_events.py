@@ -16,6 +16,12 @@ def test_event_time_and_participants(ctx):
     assert ctx.conn.execute("select count(*) from passage_time").fetchone()[0] == 1
     assert ctx.conn.execute(
         "select count(*) from event_participant").fetchone()[0] == 2
+    assert ctx.conn.execute(
+        "select passage_id from event").fetchone()[0] == "p:z:1:001"
+    assert ctx.conn.execute(
+        "select count(*) from event_place").fetchone()[0] == 1
+    assert ctx.conn.execute(
+        "select count(*) from passage_place").fetchone()[0] == 0
 
 
 def test_place_with_coordinates(ctx):
@@ -37,3 +43,11 @@ def test_tags_are_upserted(ctx):
     assert ctx.conn.execute("select count(*) from tag").fetchone()[0] == 1
     assert ctx.conn.execute(
         "select count(*) from passage_tag").fetchone()[0] == 1
+
+
+def test_homophone_places_do_not_collide(ctx):
+    persist_places(ctx.conn, _chunk(), {"places": [
+        {"passage_id": "p:z:1:001", "name": "鄢"},
+        {"passage_id": "p:z:1:001", "name": "燕"}]})
+    rows = ctx.conn.execute("select canonical_name from place").fetchall()
+    assert {row[0] for row in rows} == {"鄢", "燕"}

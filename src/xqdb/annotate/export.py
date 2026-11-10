@@ -9,6 +9,10 @@ EXPORTS = {
     "event_participants": ("event_participant", "event_id, entity_id"),
     "passage_times": ("passage_time", "id"),
     "passage_places": ("passage_place", "passage_id, place_id, role"),
+    "places": ("place", "id"),
+    "place_names": ("place_name", "id"),
+    "place_locations": ("place_location", "id"),
+    "place_hierarchy": ("place_hierarchy", "child_id, parent_id, relation"),
     "tags": ("tag", "id"),
     "passage_tags": ("passage_tag", "passage_id, tag_id"),
 }

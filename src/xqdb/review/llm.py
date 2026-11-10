@@ -2,7 +2,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from ..annotate.schema import parse_annotation, validate_annotation
+from ..annotate.schema import (
+    AnnotationInvalid,
+    parse_annotation,
+    validate_annotation,
+)
 from ..harness.runner import Runner
 from ..tools.registry import TOOL_SPECS
 
@@ -44,6 +48,9 @@ def review_llm_batch(conn, role, client_factory, budget, runs_dir, ctx, *,
     ).fetchall()
 
     report = LLMReviewReport()
+    schema_path = Path(role.output_schema)
+    if not schema_path.exists():
+        schema_path = SCHEMA
     for row in rows:
         report.checked += 1
 
@@ -64,8 +71,8 @@ def review_llm_batch(conn, role, client_factory, budget, runs_dir, ctx, *,
 
         try:
             payload = parse_annotation(result.output)
-            validate_annotation(payload, SCHEMA)
-        except Exception:  # noqa: BLE001, S112 - invalid output writes nothing
+            validate_annotation(payload, schema_path)
+        except AnnotationInvalid:  # invalid output writes nothing
             continue
 
         findings = [

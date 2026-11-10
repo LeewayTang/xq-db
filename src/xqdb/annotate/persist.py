@@ -9,8 +9,8 @@ def persist_annotation(conn, chunk, payload: dict, *,
     with conn:
         entities = persist_entities(conn, chunk, payload)
         relations = persist_relations(conn, chunk, payload)
-        events = persist_events(conn, chunk, payload)
         places = persist_places(conn, chunk, payload)
+        events = persist_events(conn, chunk, payload)
         tags = persist_tags(conn, chunk, payload)
 
     return {

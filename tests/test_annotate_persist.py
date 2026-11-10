@@ -31,3 +31,13 @@ def test_record_state_upserts(ctx):
     record_state(ctx.conn, "s:z:1#001", "s:z:1", "error", attempts=2, error="bad")
     row = ctx.conn.execute("select status, attempts from annotation_state").fetchone()
     assert row["status"] == "error" and row["attempts"] == 2
+
+
+def test_event_place_survives_place_persist(ctx):
+    chunk = Chunk("s:z:1#001", "s:z:1", ("p:z:1:001",), "郑伯克段于鄢", 6)
+    payload = json.loads(FIXTURE.read_text("utf-8"))
+    persist_annotation(ctx.conn, chunk, payload, model="fake")
+    assert ctx.conn.execute(
+        "select count(*) from event_place").fetchone()[0] == 1
+    assert ctx.conn.execute(
+        "select count(*) from passage_place").fetchone()[0] == 1
