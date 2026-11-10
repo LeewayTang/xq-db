@@ -269,5 +269,18 @@ CREATE TABLE IF NOT EXISTS event_place (
     PRIMARY KEY (event_id, place_id, role)
 );
 
+CREATE TABLE IF NOT EXISTS annotation_state (
+    chunk_id    TEXT PRIMARY KEY,
+    section_id  TEXT NOT NULL REFERENCES section(id) ON DELETE CASCADE,
+    status      TEXT NOT NULL CHECK (status IN ('ok', 'error')),
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    error       TEXT,
+    model       TEXT,
+    updated_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_annotation_state_section
+    ON annotation_state(section_id, status);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS section_fts
     USING fts5(section_id UNINDEXED, text_norm, tokenize='trigram');
