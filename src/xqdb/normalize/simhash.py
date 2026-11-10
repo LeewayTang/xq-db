@@ -2,7 +2,7 @@ import hashlib
 from collections import Counter
 
 
-def _tokens(text: str, width: int = 2) -> list[str]:
+def _tokens(text: str, width: int = 3) -> list[str]:
     chars = [ch for ch in text if not ch.isspace()]
     if not chars:
         return []
@@ -11,7 +11,7 @@ def _tokens(text: str, width: int = 2) -> list[str]:
     return ["".join(chars[i:i + width]) for i in range(len(chars) - width + 1)]
 
 
-def simhash64(text: str, width: int = 2) -> str:
+def simhash64(text: str, width: int = 3) -> str:
     tokens = _tokens(text, width)
     if not tokens:
         return "0" * 16
