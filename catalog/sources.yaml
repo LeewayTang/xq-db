@@ -1,0 +1,20 @@
+daizhige:
+  name: 殆知阁古代文献 V2.0
+  url: https://github.com/garychowcmu/daizhigev20
+  license: unknown
+  trust: tertiary
+  notes: 约 2.1 GB、三万余部，经史子集与野史笔记；无 LICENSE 声明，仅作本地与私有语料仓使用。
+
+wikisource:
+  name: 中文维基文库
+  url: https://zh.wikisource.org
+  license: CC-BY-SA-4.0
+  trust: secondary
+  notes: 先秦核心文本的校对基准，需保留署名与相同方式共享。
+
+github_public:
+  name: 公开 GitHub 古籍仓库
+  url: https://github.com
+  license: mixed
+  trust: tertiary
+  notes: 逐仓核对许可证后再纳入，默认隔离。
