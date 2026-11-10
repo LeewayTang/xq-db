@@ -1099,6 +1099,7 @@ git commit -m "feat: add temporal and spatial annotation foundation"
 | 维基文库骨架 | Task 13 |
 | 私有 Release 打包 | Task 14 |
 | 公/私双仓 | Task 15 |
+| 时空标注基础（place / passage_time / 半径与区间查询） | Task 16 |
 
 未覆盖（属于后续 Plan 2–4，不在本计划）：MCP Server、Agent 角色、实体/主题标注、向量检索、灵感工作流、`review watch` 常驻进程。
 
