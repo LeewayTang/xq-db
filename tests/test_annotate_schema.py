@@ -1,8 +1,18 @@
+import json
 import sqlite3
+from pathlib import Path
 
 import pytest
 
+from xqdb.annotate.schema import (
+    AnnotationInvalid,
+    parse_annotation,
+    validate_annotation,
+)
 from xqdb.store.db import connect, init_db
+
+SCHEMA = Path("schemas/agents/annotator.schema.json")
+FIXTURE = Path("tests/fixtures/annotations/zuozhuan.json")
 
 
 def test_annotation_state_table_exists(tmp_path):
@@ -28,3 +38,23 @@ def test_annotation_state_status_is_constrained(tmp_path):
         conn.execute(
             "insert into annotation_state(chunk_id,section_id,status,updated_at) "
             "values('c1','s1','bogus','now')")
+
+
+def test_fixture_passes_schema():
+    validate_annotation(json.loads(FIXTURE.read_text("utf-8")), SCHEMA)
+
+
+def test_missing_passage_id_rejected():
+    with pytest.raises(AnnotationInvalid):
+        validate_annotation(
+            {"entities": [{"type": "person", "name": "郑庄公"}]}, SCHEMA)
+
+
+def test_parse_strips_markdown_fence():
+    payload = parse_annotation("```json\n{\"entities\": []}\n```")
+    assert payload == {"entities": []}
+
+
+def test_parse_rejects_non_json():
+    with pytest.raises(AnnotationInvalid):
+        parse_annotation("不是 JSON")

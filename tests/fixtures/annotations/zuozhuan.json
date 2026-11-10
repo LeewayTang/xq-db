@@ -1,0 +1,27 @@
+{
+  "entities": [
+    {"passage_id": "p:z:1:001", "type": "person", "name": "郑庄公",
+     "evidence": "郑伯", "confidence": 0.9},
+    {"passage_id": "p:z:1:001", "type": "person", "name": "共叔段",
+     "evidence": "段", "confidence": 0.9}
+  ],
+  "relations": [
+    {"src_name": "郑庄公", "dst_name": "共叔段", "kind": "兄弟",
+     "passage_id": "p:z:1:001", "evidence": "郑伯克段", "confidence": 0.8}
+  ],
+  "events": [
+    {"name": "郑伯克段于鄢", "passage_id": "p:z:1:001",
+     "date_text": "隐公元年", "year_start": -722, "year_end": -722,
+     "confidence": "medium", "basis": "王年表", "place_name": "鄢",
+     "participants": ["郑庄公", "共叔段"]}
+  ],
+  "places": [
+    {"passage_id": "p:z:1:001", "name": "鄢", "role": "battle",
+     "modern_name": "河南鄢陵", "lat": 34.1, "lon": 114.2,
+     "confidence": 0.6}
+  ],
+  "tags": [
+    {"passage_id": "p:z:1:001", "name": "兄弟相残",
+     "category": "母题", "confidence": 0.9}
+  ]
+}

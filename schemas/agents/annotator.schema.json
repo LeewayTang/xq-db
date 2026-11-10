@@ -1,34 +1,80 @@
 {
   "type": "object",
-  "required": [
-    "entities"
-  ],
+  "required": ["entities"],
   "properties": {
     "entities": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "passage_id",
-          "type",
-          "name"
-        ],
+        "required": ["passage_id", "type", "name"],
         "properties": {
-          "passage_id": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "evidence": {
-            "type": "string"
-          },
-          "confidence": {
-            "type": "number"
-          }
+          "passage_id": {"type": "string"},
+          "type": {"type": "string"},
+          "name": {"type": "string"},
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number"}
+        }
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["src_name", "dst_name", "kind", "passage_id"],
+        "properties": {
+          "src_name": {"type": "string"},
+          "dst_name": {"type": "string"},
+          "kind": {"type": "string"},
+          "passage_id": {"type": "string"},
+          "evidence": {"type": "string"},
+          "confidence": {"type": "number"}
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "passage_id"],
+        "properties": {
+          "name": {"type": "string"},
+          "passage_id": {"type": "string"},
+          "date_text": {"type": "string"},
+          "year_start": {"type": "integer"},
+          "year_end": {"type": "integer"},
+          "confidence": {"type": "string"},
+          "basis": {"type": "string"},
+          "place_name": {"type": "string"},
+          "participants": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "places": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["passage_id", "name"],
+        "properties": {
+          "passage_id": {"type": "string"},
+          "name": {"type": "string"},
+          "role": {"type": "string"},
+          "modern_name": {"type": "string"},
+          "lat": {"type": "number"},
+          "lon": {"type": "number"},
+          "confidence": {"type": "number"}
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["passage_id", "name"],
+        "properties": {
+          "passage_id": {"type": "string"},
+          "name": {"type": "string"},
+          "category": {"type": "string"},
+          "confidence": {"type": "number"}
         }
       }
     }
