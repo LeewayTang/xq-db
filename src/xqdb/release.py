@@ -34,7 +34,24 @@ def _make_archive(src: Path, dest: Path) -> None:
         tar.add(src, arcname=src.name)
 
 
-def build_release(root: Path, tag: str) -> Path:
+def _split_archive(path: Path, max_bytes: int) -> list[Path]:
+    parts: list[Path] = []
+    with path.open("rb") as source:
+        index = 1
+        while True:
+            chunk = source.read(max_bytes)
+            if not chunk:
+                break
+            part = path.with_name(f"{path.name}.part{index:02d}")
+            part.write_bytes(chunk)
+            parts.append(part)
+            index += 1
+    path.unlink()
+    return parts
+
+
+def build_release(root: Path, tag: str, *,
+                  max_asset_bytes: int = 1_900_000_000) -> Path:
     root = Path(root)
     out = root / "dist" / tag
     out.mkdir(parents=True, exist_ok=True)
@@ -53,12 +70,20 @@ def build_release(root: Path, tag: str) -> Path:
         name = f"{label}-{stamp}.tar.zst"
         dest = out / name
         _make_archive(src, dest)
+        digest = _sha256_file(dest)
+        archive_size = dest.stat().st_size
+        if archive_size > max_asset_bytes:
+            parts = _split_archive(dest, max_asset_bytes)
+        else:
+            parts = [dest]
         assets.append({
             "name": name,
+            "parts": [part.name for part in parts],
             "layer": label,
             "files": files,
             "bytes": size,
-            "sha256": _sha256_file(dest),
+            "archive_bytes": archive_size,
+            "sha256": digest,
         })
 
     manifest = {

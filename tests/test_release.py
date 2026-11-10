@@ -33,3 +33,16 @@ def test_release_manifest_and_archives(tmp_path):
     names = _members(out / normalized["name"])
     assert any(name.endswith("a.md") for name in names)
     assert not any("personal" in name for name in names)
+
+
+def test_release_splits_assets_over_limit(tmp_path):
+    (tmp_path / "data/corpus").mkdir(parents=True)
+    (tmp_path / "data/corpus/a.md").write_text("正文" * 500, encoding="utf-8")
+
+    out = build_release(tmp_path, "data-v0.0.2", max_asset_bytes=128)
+    manifest = json.loads((out / "MANIFEST.json").read_text("utf-8"))
+    asset = next(
+        a for a in manifest["assets"] if a["name"].startswith("normalized-"))
+    assert len(asset["parts"]) > 1
+    for part in asset["parts"]:
+        assert (out / part).stat().st_size <= 128
