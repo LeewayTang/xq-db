@@ -23,6 +23,9 @@ make normalize                 # 原始层 -> data/corpus/*.md
 make review                    # 规则审核与 A/B/C/Q 分级
 make index                     # 重建 FTS5 trigram 索引
 make search Q="郑伯克段"       # 检索并输出带引用的结果
+make place NAME="新郑"         # 地名解析：古名、别名、现代名、坐标
+make near LAT=34.4 LON=113.75 RADIUS=50   # 按地理半径检索
+make when START=-770 END=-750  # 按时间区间检索（负数为公元前）
 make test                      # 运行测试
 ```
 

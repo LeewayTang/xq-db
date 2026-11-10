@@ -12,6 +12,8 @@ from .normalize.pipeline import normalize_file
 from .normalize.simplify import to_simplified
 from .release import build_release
 from .review.pipeline import review_batch
+from .space.place import resolve_place
+from .space.query import passages_in_time, passages_near
 from .store.db import connect, init_db
 
 DAIZHIGE_URL = "https://github.com/garychowcmu/daizhigev20"
@@ -57,6 +59,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     release = sub.add_parser("release", parents=[common], help="打包数据 Release")
     release.add_argument("--tag", required=True)
+
+    place = sub.add_parser("place", parents=[common], help="解析地名")
+    place.add_argument("name")
+
+    near = sub.add_parser("near", parents=[common], help="按地理半径检索")
+    near.add_argument("lat", type=float)
+    near.add_argument("lon", type=float)
+    near.add_argument("--radius", type=float, default=50.0)
+
+    when = sub.add_parser("when", parents=[common], help="按时间范围检索")
+    when.add_argument("start", type=int)
+    when.add_argument("end", type=int)
 
     return parser
 
@@ -219,6 +233,47 @@ def cmd_stats(args) -> int:
     return 0
 
 
+def cmd_place(args) -> int:
+    _, conn = _connect(args)
+    matches = resolve_place(conn, args.name)
+    conn.close()
+    if not matches:
+        print("no results")
+        return 0
+    for match in matches:
+        coords = (f"{match.lat:.4f},{match.lon:.4f}"
+                  if match.lat is not None else "?")
+        modern = f" ({match.modern_name})" if match.modern_name else ""
+        print(f"[{match.place_id}] {match.canonical_name} · "
+              f"{match.matched_name}/{match.name_type} {coords}{modern}")
+    return 0
+
+
+def _print_hits(hits) -> None:
+    if not hits:
+        print("no results")
+        return
+    for hit in hits:
+        print(f"[{hit.passage_id}] {hit.work} · {hit.section}")
+        print(f"  {hit.text}")
+
+
+def cmd_near(args) -> int:
+    _, conn = _connect(args)
+    hits = passages_near(conn, args.lat, args.lon, args.radius)
+    conn.close()
+    _print_hits(hits)
+    return 0
+
+
+def cmd_when(args) -> int:
+    _, conn = _connect(args)
+    hits = passages_in_time(conn, args.start, args.end)
+    conn.close()
+    _print_hits(hits)
+    return 0
+
+
 def cmd_release(args) -> int:
     cfg = _cfg(args)
     out = build_release(cfg.root, args.tag)
@@ -235,6 +290,9 @@ COMMANDS = {
     "search": cmd_search,
     "stats": cmd_stats,
     "release": cmd_release,
+    "place": cmd_place,
+    "near": cmd_near,
+    "when": cmd_when,
 }
 
 

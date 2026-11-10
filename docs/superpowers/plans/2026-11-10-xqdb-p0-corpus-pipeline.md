@@ -991,6 +991,94 @@ Expected: 两条命令成功；`git remote -v` 显示 `origin`。
 
 ---
 
+### Task 16: 时空标注基础与查询
+
+**Files:**
+- Modify: `schemas/schema.sql`
+- Create: `src/xqdb/space/__init__.py`, `src/xqdb/space/place.py`, `src/xqdb/space/query.py`
+- Modify: `src/xqdb/cli.py`
+- Test: `tests/test_space.py`
+
+**Interfaces:**
+- Consumes: `Hit`、`connect`
+- Produces: `@dataclass PlaceMatch(place_id, canonical_name, matched_name, name_type, lat, lon, precision_m, modern_name, confidence)`；`resolve_place(conn, name) -> list[PlaceMatch]`；`upsert_place(conn, place_id, canonical_name, type=None)`；`add_name(conn, place_id, name, name_type, period=None, is_preferred=False)`；`add_location(conn, place_id, lat, lon, *, precision_m=5000, modern_province=None, modern_city=None, modern_county=None, hypothesis=None, confidence=0.5, is_primary=False)`；`haversine_km(a_lat, a_lon, b_lat, b_lon) -> float`；`passages_in_time(conn, start, end, limit=20) -> list[Hit]`；`passages_near(conn, lat, lon, radius_km, limit=20) -> list[Hit]`
+
+- [ ] **Step 1: 写失败测试**
+
+```python
+# tests/test_space.py
+from xqdb.space.place import (add_location, add_name, haversine_km,
+                              resolve_place, upsert_place)
+from xqdb.space.query import passages_in_time, passages_near
+from xqdb.store.db import connect, init_db
+
+def _place(conn):
+    upsert_place(conn, "pl:xinzheng", "新郑", "邑")
+    add_name(conn, "pl:xinzheng", "郑", "ancient", period="春秋", is_preferred=True)
+    add_name(conn, "pl:xinzheng", "新郑市", "modern", is_preferred=True)
+    add_location(conn, "pl:xinzheng", 34.39, 113.74, precision_m=5000,
+                 modern_province="河南", modern_city="郑州",
+                 modern_county="新郑", is_primary=True)
+    upsert_place(conn, "pl:mingtiao", "鸣条", "战场")
+    add_name(conn, "pl:mingtiao", "鸣条", "ancient", is_preferred=True)
+    add_location(conn, "pl:mingtiao", 35.03, 111.22,
+                 hypothesis="安邑说", confidence=0.4)
+    add_location(conn, "pl:mingtiao", 35.14, 111.22,
+                 hypothesis="夏县说", confidence=0.3)
+    conn.commit()
+
+def test_resolve_by_ancient_and_modern_name(tmp_path):
+    conn = connect(tmp_path/"x.db"); init_db(conn); _place(conn)
+    assert resolve_place(conn, "郑")[0].place_id == "pl:xinzheng"
+    assert resolve_place(conn, "新郑市")[0].place_id == "pl:xinzheng"
+
+def test_multiple_location_hypotheses_preserved(tmp_path):
+    conn = connect(tmp_path/"x.db"); init_db(conn); _place(conn)
+    matches = [m for m in resolve_place(conn, "鸣条") if m.lat is not None]
+    assert len(matches) == 2
+
+def test_haversine():
+    d = haversine_km(39.90, 116.40, 31.23, 121.47)
+    assert 1000 < d < 1200
+
+def test_time_overlap(tmp_path):
+    conn = connect(tmp_path/"x.db"); init_db(conn); _seed_passage(conn, -770, -750)
+    assert passages_in_time(conn, -760, -755)[0].passage_id == "p:t:1:001"
+    assert passages_in_time(conn, -700, -690) == []
+
+def test_near_radius(tmp_path):
+    conn = connect(tmp_path/"x.db"); init_db(conn); _place(conn); _seed_passage(conn, -770, -750, place="pl:xinzheng")
+    assert passages_near(conn, 34.40, 113.75, 50)[0].passage_id == "p:t:1:001"
+    assert passages_near(conn, 31.23, 121.47, 50) == []
+```
+
+`_seed_passage` 是测试内的辅助函数，插入 source/work/edition/section/passage，并按需插入 `passage_time` 与 `passage_place`。
+
+- [ ] **Step 2: 运行测试确认失败**
+
+Run: `pytest tests/test_space.py -v`
+Expected: FAIL，`ModuleNotFoundError: No module named 'xqdb.space'`
+
+- [ ] **Step 3: 实现 schema 与模块**
+
+`schemas/schema.sql` 增加 `place / place_name / place_location / place_hierarchy / passage_place / passage_time / event_place`，字段与设计文档 7.8 一致。
+
+`resolve_place`：按 `place_name.name` 精确匹配，返回该地点全部坐标假设；无坐标时返回一个 `lat=None` 的匹配。`passages_in_time` 用区间重叠 `year_start <= end AND year_end >= start`。`passages_near` 在 Python 中算 haversine，按距离排序。两者都只取 `quality_grade in ('A','B')` 并按 `work` 去重。
+
+- [ ] **Step 4: 运行测试确认通过**
+
+Run: `pytest tests/test_space.py -v`
+Expected: 通过
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add schemas src/xqdb/space src/xqdb/cli.py tests/test_space.py
+git commit -m "feat: add temporal and spatial annotation foundation"
+```
+
+---
+
 ## 自检
 
 **1. Spec 覆盖**

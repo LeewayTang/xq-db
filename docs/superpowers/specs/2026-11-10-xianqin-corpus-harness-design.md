@@ -202,6 +202,17 @@ entity(id, type, name, name_alt, description, era)
 mention(id, passage_id, entity_id, surface, role, confidence)
 relation(id, src_entity, dst_entity, kind, evidence_passage_id)
 quotation(id, passage_id, quoted_work_id, quoted_title, confidence)  -- 类书引文/佚文
+
+-- 时空层
+place(id, canonical_name, type, description, era, notes)
+place_name(id, place_id, name, name_type, period, source_passage_id, is_preferred)
+place_location(id, place_id, lat, lon, precision_m, valid_from, valid_to,
+               modern_province, modern_city, modern_county, modern_detail,
+               hypothesis, confidence, evidence, is_primary)
+place_hierarchy(child_id, parent_id, relation, period_start, period_end)
+passage_place(passage_id, place_id, role, confidence)
+passage_time(passage_id, year_start, year_end, confidence, basis)
+event_place(event_id, place_id, role, seq)
 event(id, name, date_text, year_start, year_end, place_id, summary)
 event_participant(event_id, entity_id, role)
 tag(id, name, category)
@@ -261,7 +272,38 @@ L3 不能笼统地说"可重建"。按成本与不可替代性拆成三类：
 - `confidence`（high / medium / low）标记推定可信度。
 - `basis` 记录换算依据（王年表、月相、碳十四等）。
 
-`timeline()` 查询按区间重叠返回，不假设精确单点。
+**年份约定**：使用带符号整数，`-770` 表示公元前 770 年，`453` 表示公元 453 年；不存在公元 0 年。显示层负责转成"公元前 770 年"。所有时间区间按**重叠**判断，不假设精确单点。
+
+### 7.8 空间与地名模型
+
+先秦地名有三类复杂性：一地多名、一名多地、古今对应有争议。因此不能把地名塞进一个字段，需要分层建模：
+
+| 表 | 作用 |
+|---|---|
+| `place` | 地点的规范实体 |
+| `place_name` | 历史名称、别名、现代行政区名 |
+| `place_location` | 坐标与定位假设，可多条并存 |
+| `place_hierarchy` | 历史行政或地理隶属关系 |
+
+```sql
+place(id, canonical_name, type, description, era, notes)
+place_name(id, place_id, name, name_type, period,
+           source_passage_id, is_preferred)
+place_location(id, place_id, lat, lon, precision_m, valid_from, valid_to,
+               modern_province, modern_city, modern_county, modern_detail,
+               hypothesis, confidence, evidence, is_primary)
+place_hierarchy(child_id, parent_id, relation, period_start, period_end)
+passage_place(passage_id, place_id, role, confidence)
+passage_time(passage_id, year_start, year_end, confidence, basis)
+event_place(event_id, place_id, role, seq)
+```
+
+- `name_type`：`ancient / alias / administrative / modern / variant / transliteration`。
+- 同一地点允许多个坐标假设（如"鸣条"的安邑说、夏县说），用 `hypothesis` 与 `confidence` 并存，**不覆盖、不取平均**。
+- `precision_m` 表示定位精度；`is_primary` 标记默认展示的假设。
+- `resolve_place(name)` 同时匹配古名、别名、现代名，返回地点及其全部坐标假设。
+- 检索支持 `time_range`、`place_id`、`radius_km` 三种过滤，组合时取交集。
+- 时间与空间是**标注层**，不写进文件路径；同一作品的不同段落可以落在不同时空。
 
 ## 8. Agent Harness 设计
 
@@ -471,6 +513,8 @@ ingest → normalize → review → catalog → annotate → index → export/re
 12. 批量 Agent 走无头 Anthropic API，设 token 与费用上限，先小样本校准再放量。
 13. 传统注疏作为独立作品收录，用 `annotates` 关系链接底本。
 14. 人工复核只覆盖异常与抽样，常规批次无人值守。
+15. 时间用带符号年份（`-770` = 公元前 770 年），只存区间与置信度，不存单一推定年份。
+16. 地名用 `place / place_name / place_location` 三层建模；坐标多假设并存，不覆盖、不取平均。
 
 ## 15. 风险与对策
 

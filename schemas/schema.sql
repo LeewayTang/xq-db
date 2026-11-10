@@ -190,5 +190,84 @@ CREATE TABLE IF NOT EXISTS index_meta (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS place (
+    id             TEXT PRIMARY KEY,
+    canonical_name TEXT NOT NULL,
+    type           TEXT,
+    description    TEXT,
+    era            TEXT,
+    notes          TEXT
+);
+
+CREATE TABLE IF NOT EXISTS place_name (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    place_id           TEXT NOT NULL REFERENCES place(id) ON DELETE CASCADE,
+    name               TEXT NOT NULL,
+    name_type          TEXT NOT NULL,
+    period             TEXT,
+    source_passage_id  TEXT REFERENCES passage(id),
+    is_preferred       INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_place_name_name ON place_name(name);
+CREATE INDEX IF NOT EXISTS idx_place_name_place ON place_name(place_id);
+
+CREATE TABLE IF NOT EXISTS place_location (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    place_id         TEXT NOT NULL REFERENCES place(id) ON DELETE CASCADE,
+    lat              REAL NOT NULL,
+    lon              REAL NOT NULL,
+    precision_m      INTEGER,
+    valid_from       INTEGER,
+    valid_to         INTEGER,
+    modern_province  TEXT,
+    modern_city      TEXT,
+    modern_county    TEXT,
+    modern_detail    TEXT,
+    hypothesis       TEXT,
+    confidence       REAL,
+    evidence         TEXT,
+    is_primary       INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_place_location_place ON place_location(place_id);
+
+CREATE TABLE IF NOT EXISTS place_hierarchy (
+    child_id      TEXT NOT NULL REFERENCES place(id),
+    parent_id     TEXT NOT NULL REFERENCES place(id),
+    relation      TEXT NOT NULL DEFAULT 'within',
+    period_start  INTEGER,
+    period_end    INTEGER,
+    PRIMARY KEY (child_id, parent_id, relation)
+);
+
+CREATE TABLE IF NOT EXISTS passage_place (
+    passage_id  TEXT NOT NULL REFERENCES passage(id) ON DELETE CASCADE,
+    place_id    TEXT NOT NULL REFERENCES place(id),
+    role        TEXT NOT NULL DEFAULT 'mention',
+    confidence  REAL,
+    PRIMARY KEY (passage_id, place_id, role)
+);
+
+CREATE TABLE IF NOT EXISTS passage_time (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    passage_id  TEXT NOT NULL REFERENCES passage(id) ON DELETE CASCADE,
+    year_start  INTEGER,
+    year_end    INTEGER,
+    confidence  TEXT,
+    basis       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_passage_time_range
+    ON passage_time(year_start, year_end);
+
+CREATE TABLE IF NOT EXISTS event_place (
+    event_id  TEXT NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+    place_id  TEXT NOT NULL REFERENCES place(id),
+    role      TEXT NOT NULL DEFAULT 'site',
+    seq       INTEGER,
+    PRIMARY KEY (event_id, place_id, role)
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS passage_fts
     USING fts5(passage_id UNINDEXED, text_norm, tokenize='trigram');
