@@ -31,7 +31,8 @@ def test_parse_fixture():
 
 
 def test_core_titles():
-    assert "左传" in CORE_TITLES and len(CORE_TITLES) >= 14
+    assert "春秋左氏傳" in CORE_TITLES and len(CORE_TITLES) >= 14
+    assert "清華大學藏戰國竹簡" in CORE_TITLES
 
 
 def test_write_pages_creates_manifest(tmp_path):
