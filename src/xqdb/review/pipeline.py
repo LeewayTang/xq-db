@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .rules import Finding, check_text, grade
@@ -29,7 +29,7 @@ def review_batch(conn, batch_id: str, corpus_dir: Path) -> BatchReport:
         (batch_id,),
     ).fetchall()
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     results: list[ReviewResult] = []
 
     for row in rows:
