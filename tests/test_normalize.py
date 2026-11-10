@@ -50,3 +50,14 @@ def test_same_title_different_paths_do_not_collide(tmp_path):
     second = normalize_file(
         second_raw, "子藏/乙/同名.txt", "daizhige", tmp_path / "corpus")
     assert first.path != second.path
+
+
+def test_wikisource_source_uses_heading_parser(tmp_path):
+    raw = tmp_path / "論語.txt"
+    raw.write_text(
+        "== 學而 ==\n子曰學而時習之。\n== 為政 ==\n子曰為政以德。\n",
+        encoding="utf-8")
+    result = normalize_file(
+        raw, "論語.txt", "wikisource", tmp_path / "corpus")
+    text = result.path.read_text(encoding="utf-8")
+    assert "## 學而" in text and "## 為政" in text

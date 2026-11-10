@@ -61,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
                            help="覆盖已存在的版本")
     normalize.add_argument("--force-annotated", action="store_true",
                            help="允许覆盖已有标注/审核记录的版本")
+    normalize.add_argument("--source", default=None,
+                           help="只处理某个语料源")
 
     review = sub.add_parser("review", parents=[common], help="审核并分级")
     review.add_argument("--batch", default="default")
@@ -232,6 +234,10 @@ def _has_dependents(conn, edition_id: str) -> bool:
 def cmd_normalize(args) -> int:
     cfg, conn = _connect(args)
     manifests = sorted(cfg.raw_dir.glob("*/manifest.jsonl"))
+    if args.source:
+        manifests = [
+            manifest for manifest in manifests
+            if manifest.parent.name == args.source]
     if not manifests:
         print(f"no manifest found under {cfg.raw_dir}")
         return 1

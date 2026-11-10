@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from xqdb.normalize.parse import parse_daizhige_text, strip_indent
+from xqdb.normalize.parse import (
+    parse_daizhige_text,
+    parse_wikisource_text,
+    strip_indent,
+)
 
 SAMPLE = """隐公（元年～十一年）
 　　桓公（元年～十八年）
@@ -42,3 +46,10 @@ def test_fixture_loads():
     path = Path("tests/fixtures/daizhige/儒藏/春秋/春秋左传.txt")
     w = parse_daizhige_text(path.read_text(encoding="utf-8"), "春秋左传")
     assert w.sections and w.sections[0].title
+
+
+def test_wikisource_headings_split_sections():
+    w = parse_wikisource_text(
+        "== 學而 ==\n子曰學而時習之。\n== 為政 ==\n子曰為政以德。", "論語")
+    assert [section.title for section in w.sections] == ["學而", "為政"]
+    assert w.sections[0].lines == ["子曰學而時習之。"]

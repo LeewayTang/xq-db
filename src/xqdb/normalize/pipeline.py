@@ -6,7 +6,7 @@ import yaml
 
 from .encoding import decode_bytes
 from .ids import edition_id, slugify_title, work_id
-from .parse import parse_daizhige_text
+from .parse import parse_daizhige_text, parse_wikisource_text
 from .simhash import simhash64
 
 
@@ -42,7 +42,10 @@ def normalize_file(
     data = raw.read_bytes()
     decoded = decode_bytes(data)
     title = Path(rel_path).stem
-    parsed = parse_daizhige_text(decoded.text, title)
+    if source == "wikisource":
+        parsed = parse_wikisource_text(decoded.text, title)
+    else:
+        parsed = parse_daizhige_text(decoded.text, title)
 
     wid = work_id(title)
     if work_suffix:
