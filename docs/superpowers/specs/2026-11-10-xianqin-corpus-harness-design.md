@@ -226,13 +226,14 @@ highlight(id, passage_id, kind, note, created_at)   -- 用户手动标记
 link(id, a_type, a_id, b_type, b_id, kind)   -- 通用联想链接
 
 -- 检索层（派生）
-CREATE VIRTUAL TABLE passage_fts USING fts5(
-  text_norm, content='passage', content_rowid='rowid',
-  tokenize='trigram'
+CREATE VIRTUAL TABLE section_fts USING fts5(
+  section_id UNINDEXED, text_norm, tokenize='trigram'
 );
 CREATE TABLE embedding(passage_id, model, dim, vec BLOB);
 CREATE TABLE index_meta(key, value);  -- 语料版本、模型名、构建时间
 ```
+
+**索引粒度**：以**章节**为索引单元（约 3.4 万行），而不是以段落为单元（逾 2,000 万行）。命中章节后，再在该章节内回查包含查询串的具体段落，返回段落级引用。这样索引构建从小时级降到秒级，索引体积缩小两个数量级，同时保留精确到段落的引用能力。代价是 bm25 排序按章节计算，对"找素材"这一用途足够。
 
 **分词选择**：FTS5 的 `trigram` 分词器对中文无需分词即可做子串与短语匹配，天然容忍异体字差异较小的情况；再叠加一层 `jieba` 预分词列做词级检索。两路结果用 RRF 融合。
 
@@ -315,7 +316,7 @@ Harness = **模型 + 工具 + 循环 + 上下文管理 + 运行记录**。设计
 
 | 工具 | 作用 |
 |---|---|
-| `search_keyword(query, filters, limit)` | 全文/短语检索，返回段落级命中 |
+| `search_keyword(query, filters, limit)` | 全文/短语检索，命中章节后回查具体段落 |
 | `search_semantic(query, filters, k)` | 向量检索 |
 | `search_hybrid(query, filters, k)` | 两路融合 |
 | `get_passage(id, context)` | 取回段落及上下文 |
@@ -515,6 +516,7 @@ ingest → normalize → review → catalog → annotate → index → export/re
 14. 人工复核只覆盖异常与抽样，常规批次无人值守。
 15. 时间用带符号年份（`-770` = 公元前 770 年），只存区间与置信度，不存单一推定年份。
 16. 地名用 `place / place_name / place_location` 三层建模；坐标多假设并存，不覆盖、不取平均。
+17. 全文索引按章节粒度构建（约 3.4 万行），命中后回查段落；避免对 2,000 万段落直接建 trigram 索引。
 
 ## 15. 风险与对策
 

@@ -269,5 +269,5 @@ CREATE TABLE IF NOT EXISTS event_place (
     PRIMARY KEY (event_id, place_id, role)
 );
 
-CREATE VIRTUAL TABLE IF NOT EXISTS passage_fts
-    USING fts5(passage_id UNINDEXED, text_norm, tokenize='trigram');
+CREATE VIRTUAL TABLE IF NOT EXISTS section_fts
+    USING fts5(section_id UNINDEXED, text_norm, tokenize='trigram');

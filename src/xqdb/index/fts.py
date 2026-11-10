@@ -12,30 +12,46 @@ class Hit:
     score: float
 
 
-def rebuild_fts(conn, *, batch_size: int = 10000) -> int:
-    conn.execute("delete from passage_fts")
+def _write_batch(conn, batch: list[tuple[str, str]]) -> None:
+    conn.executemany(
+        "insert into section_fts(section_id, text_norm) values (?, ?)",
+        batch,
+    )
+    conn.commit()
+
+
+def rebuild_fts(conn, *, batch_size: int = 1000) -> int:
+    """Index one row per section; passages are resolved after matching."""
+    conn.execute("delete from section_fts")
     conn.commit()
 
     count = 0
     batch: list[tuple[str, str]] = []
-    for row in conn.execute("select id, text_norm from passage"):
-        batch.append((row["id"], row["text_norm"]))
-        if len(batch) >= batch_size:
-            conn.executemany(
-                "insert into passage_fts(passage_id, text_norm) values (?, ?)",
-                batch,
-            )
-            conn.commit()
-            count += len(batch)
-            batch.clear()
+    current: str | None = None
+    parts: list[str] = []
 
+    def flush_section() -> None:
+        nonlocal count
+        if current is None:
+            return
+        batch.append((current, "\n".join(parts)))
+        count += 1
+
+    for row in conn.execute(
+            "select section_id, text_norm from passage order by section_id, idx"):
+        if row["section_id"] != current:
+            flush_section()
+            if len(batch) >= batch_size:
+                _write_batch(conn, batch)
+                batch.clear()
+            current = row["section_id"]
+            parts = [row["text_norm"]]
+        else:
+            parts.append(row["text_norm"])
+
+    flush_section()
     if batch:
-        conn.executemany(
-            "insert into passage_fts(passage_id, text_norm) values (?, ?)",
-            batch,
-        )
-        conn.commit()
-        count += len(batch)
+        _write_batch(conn, batch)
 
     return count
 
@@ -44,24 +60,19 @@ def _placeholders(values) -> str:
     return ", ".join("?" for _ in values)
 
 
-def _rows_to_hits(rows, limit: int) -> list[Hit]:
-    hits: list[Hit] = []
-    seen: set[str] = set()
-    for row in rows:
-        work_id = row["work_id"]
-        if work_id in seen:
-            continue
-        seen.add(work_id)
-        hits.append(Hit(
-            passage_id=row["passage_id"],
-            work=row["work"],
-            section=row["section"],
-            text=row["text"],
-            score=float(row["score"]),
-        ))
-        if len(hits) >= limit:
-            break
-    return hits
+def _best_passage(conn, section_id: str, query: str):
+    row = conn.execute(
+        "select id, text from passage "
+        "where section_id = ? and text_norm like ? order by idx limit 1",
+        (section_id, f"%{query}%"),
+    ).fetchone()
+    if row is None:
+        row = conn.execute(
+            "select id, text from passage where section_id = ? "
+            "order by idx limit 1",
+            (section_id,),
+        ).fetchone()
+    return row
 
 
 def search(
@@ -76,62 +87,52 @@ def search(
         return []
 
     if len(query) < 3:
-        sql = f"""
-            with hits as (
-                select p.id as passage_id, w.title as work,
-                       s.title as section, p.text as text, 0.0 as score,
-                       e.work_id as work_id,
-                       case e.quality_grade
-                           when 'A' then 0 when 'B' then 1
-                           when 'C' then 2 when 'Q' then 3 else 4 end
-                           as grade_rank
-                from passage p
-                join section s on s.id = p.section_id
-                join edition e on e.id = s.edition_id
-                join work w on w.id = e.work_id
-                where p.text_norm like ?
-                  and e.quality_grade in ({_placeholders(grades)})
-            ), ranked as (
-                select *, row_number() over (
-                    partition by work_id
-                    order by grade_rank, passage_id) as rn
-                from hits
-            )
-            select passage_id, work, section, text, score, work_id
-            from ranked where rn = 1
-            order by grade_rank, passage_id
-            limit ?
-        """
-        params = [f"%{query}%", *grades, limit]
+        condition = "f.text_norm like ?"
+        score = "0.0"
+        params = [f"%{query}%", *grades]
     else:
         match = '"' + query.replace('"', '""') + '"'
-        sql = f"""
-            with hits as (
-                select p.id as passage_id, w.title as work,
-                       s.title as section, p.text as text,
-                       bm25(passage_fts) as score, e.work_id as work_id,
-                       case e.quality_grade
-                           when 'A' then 0 when 'B' then 1
-                           when 'C' then 2 when 'Q' then 3 else 4 end
-                           as grade_rank
-                from passage_fts
-                join passage p on p.id = passage_fts.passage_id
-                join section s on s.id = p.section_id
-                join edition e on e.id = s.edition_id
-                join work w on w.id = e.work_id
-                where passage_fts match ?
-                  and e.quality_grade in ({_placeholders(grades)})
-            ), ranked as (
-                select *, row_number() over (
-                    partition by work_id
-                    order by grade_rank, score, passage_id) as rn
-                from hits
-            )
-            select passage_id, work, section, text, score, work_id
-            from ranked where rn = 1
-            order by grade_rank, score
-            limit ?
-        """
-        params = [match, *grades, limit]
+        condition = "section_fts match ?"
+        score = "bm25(section_fts)"
+        params = [match, *grades]
 
-    return _rows_to_hits(conn.execute(sql, params).fetchall(), limit)
+    sql = f"""
+        with hits as (
+            select f.section_id, s.title as section, w.title as work,
+                   e.work_id as work_id, {score} as score,
+                   case e.quality_grade
+                       when 'A' then 0 when 'B' then 1
+                       when 'C' then 2 when 'Q' then 3 else 4 end
+                       as grade_rank
+            from section_fts f
+            join section s on s.id = f.section_id
+            join edition e on e.id = s.edition_id
+            join work w on w.id = e.work_id
+            where {condition}
+              and e.quality_grade in ({_placeholders(grades)})
+        ), ranked as (
+            select *, row_number() over (
+                partition by work_id
+                order by grade_rank, score, section_id) as rn
+            from hits
+        )
+        select section_id, work, section, score
+        from ranked where rn = 1
+        order by grade_rank, score
+        limit ?
+    """
+    params.append(limit)
+
+    hits: list[Hit] = []
+    for row in conn.execute(sql, params).fetchall():
+        passage = _best_passage(conn, row["section_id"], query)
+        if passage is None:
+            continue
+        hits.append(Hit(
+            passage_id=passage["id"],
+            work=row["work"],
+            section=row["section"],
+            text=passage["text"],
+            score=float(row["score"]),
+        ))
+    return hits

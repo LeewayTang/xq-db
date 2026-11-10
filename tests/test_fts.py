@@ -92,7 +92,7 @@ def test_search_does_not_starve_other_works(tmp_path):
     assert {hit.work for hit in hits} == {"大书", "小书"}
 
 
-def test_rebuild_fts_streams_in_batches(tmp_path):
+def test_rebuild_indexes_each_section_once(tmp_path):
     conn = connect(tmp_path / "x.db")
     init_db(conn)
     _seed(conn)
@@ -103,8 +103,24 @@ def test_rebuild_fts_streams_in_batches(tmp_path):
         "insert into passage(id,section_id,idx,text,text_norm,char_count) "
         "values('p:z:1:003','s:z:1',3,'郑伯克段于鄢三','郑伯克段于鄢三',8)")
     conn.commit()
-    assert rebuild_fts(conn, batch_size=2) == 3
+    assert rebuild_fts(conn, batch_size=2) == 1
     assert search(conn, "郑伯克段")
+
+
+def test_search_returns_matching_passage_inside_section(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    _seed(conn)
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:z:1:002','s:z:1',2,'郑伯克段于鄢','郑伯克段于鄢',7)")
+    conn.execute(
+        "update passage set text='无关文字', text_norm='无关文字' "
+        "where id='p:z:1:001'")
+    conn.commit()
+    rebuild_fts(conn)
+    hits = search(conn, "郑伯克段")
+    assert hits[0].passage_id == "p:z:1:002"
 
 
 def test_dedupe_prefers_higher_grade(tmp_path):
