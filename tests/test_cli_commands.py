@@ -106,6 +106,31 @@ def test_release_command(tmp_path):
     assert (tmp_path / "dist" / "data-v0.1.0" / "MANIFEST.json").exists()
 
 
+def test_normalize_handles_wikisource_manifest(tmp_path):
+    import hashlib
+    import json
+
+    _project(tmp_path)
+    raw_dir = tmp_path / "data" / "raw" / "wikisource"
+    raw_dir.mkdir(parents=True)
+    text = "子曰：学而时习之。\n"
+    (raw_dir / "论语.txt").write_text(text, encoding="utf-8")
+    data = text.encode("utf-8")
+    (raw_dir / "manifest.jsonl").write_text(json.dumps({
+        "rel_path": "论语.txt",
+        "raw_path": str(raw_dir / "论语.txt"),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "size": len(data),
+    }, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    assert main(["--root", str(tmp_path), "init"]) == 0
+    assert main(["--root", str(tmp_path), "normalize"]) == 0
+
+    conn = connect(tmp_path / "data" / "xq_index.db")
+    assert conn.execute(
+        "select source_id from edition").fetchone()[0] == "wikisource"
+
+
 def test_normalize_skips_existing_without_force(tmp_path):
     db = _pipeline(tmp_path)
     conn = connect(db)

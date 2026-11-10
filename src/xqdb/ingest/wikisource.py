@@ -1,5 +1,9 @@
+import json
 import re
 from dataclasses import dataclass
+from pathlib import Path
+
+from .daizhige import enumerate_corpus
 
 API = "https://zh.wikisource.org/w/api.php"
 BATCH = 50
@@ -79,3 +83,30 @@ def fetch_pages(titles: list[str], client) -> list[WikiPage]:
         response.raise_for_status()
         pages.extend(parse_response(response.json()))
     return pages
+
+
+def safe_filename(title: str) -> str:
+    return title.replace("/", "_").replace("\\", "_")
+
+
+def write_pages(pages: list[WikiPage], raw_dir: Path,
+                source: str = "wikisource"):
+    source_dir = Path(raw_dir) / source
+    source_dir.mkdir(parents=True, exist_ok=True)
+
+    for page in pages:
+        text = strip_wikitext(page.wikitext)
+        (source_dir / f"{safe_filename(page.title)}.txt").write_text(
+            text, encoding="utf-8")
+
+    files = enumerate_corpus(source_dir)
+    manifest = source_dir / "manifest.jsonl"
+    with manifest.open("w", encoding="utf-8") as handle:
+        for item in files:
+            handle.write(json.dumps({
+                "rel_path": item.rel_path,
+                "raw_path": str(item.path),
+                "sha256": item.sha256,
+                "size": item.size,
+            }, ensure_ascii=False) + "\n")
+    return files

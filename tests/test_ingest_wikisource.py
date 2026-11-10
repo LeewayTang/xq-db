@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
 
-from xqdb.ingest.wikisource import CORE_TITLES, parse_response, strip_wikitext
+from xqdb.ingest.wikisource import (
+    CORE_TITLES,
+    WikiPage,
+    parse_response,
+    strip_wikitext,
+    write_pages,
+)
 
 
 def test_strip_wikitext_removes_templates_and_links():
@@ -23,3 +29,18 @@ def test_parse_fixture():
 
 def test_core_titles():
     assert "左传" in CORE_TITLES and len(CORE_TITLES) >= 14
+
+
+def test_write_pages_creates_manifest(tmp_path):
+    files = write_pages(
+        [WikiPage("论语", "子曰：[[学而]]{{注}}时习之。")], tmp_path)
+    assert len(files) == 1
+    assert (tmp_path / "wikisource" / "论语.txt").read_text(
+        encoding="utf-8") == "子曰：学而时习之。"
+    manifest = tmp_path / "wikisource" / "manifest.jsonl"
+    assert "\"rel_path\": \"论语.txt\"" in manifest.read_text(encoding="utf-8")
+
+
+def test_write_pages_sanitises_slashes(tmp_path):
+    write_pages([WikiPage("甲/乙", "正文")], tmp_path)
+    assert (tmp_path / "wikisource" / "甲_乙.txt").exists()

@@ -15,6 +15,7 @@ from .harness.runlog import month_to_date_cost
 from .harness.runner import Runner
 from .index.fts import rebuild_fts, search
 from .ingest.daizhige import enumerate_corpus, fetch_repo
+from .ingest.wikisource import CORE_TITLES, fetch_pages, write_pages
 from .normalize.ids import edition_id, passage_id, section_id, work_id
 from .normalize.pipeline import normalize_file
 from .normalize.simplify import to_simplified
@@ -29,6 +30,8 @@ from .tools.registry import TOOL_SPECS
 DAIZHIGE_URL = "https://github.com/garychowcmu/daizhigev20"
 DEFAULT_SOURCES = {
     "daizhige": ("殆知阁古代文献", DAIZHIGE_URL, "unknown", "tertiary"),
+    "wikisource": ("中文维基文库", "https://zh.wikisource.org",
+                   "CC-BY-SA-4.0", "secondary"),
 }
 
 
@@ -48,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("init", parents=[common], help="初始化数据目录与数据库")
 
     ingest = sub.add_parser("ingest", parents=[common], help="采集语料")
-    ingest.add_argument("source", choices=["daizhige"])
+    ingest.add_argument("source", choices=["daizhige", "wikisource"])
     ingest.add_argument("--path", default=None, help="本地语料目录")
     ingest.add_argument("--url", default=DAIZHIGE_URL)
 
@@ -114,7 +117,8 @@ def _connect(args):
 
 
 def _ensure_source(conn, source: str) -> None:
-    name, url, license_, trust = DEFAULT_SOURCES[source]
+    name, url, license_, trust = DEFAULT_SOURCES.get(
+        source, (source, "", "unknown", "unknown"))
     conn.execute(
         "insert or ignore into source(id, name, url, license, trust) "
         "values (?, ?, ?, ?, ?)",
@@ -135,6 +139,16 @@ def cmd_init(args) -> int:
 
 def cmd_ingest(args) -> int:
     cfg = _cfg(args)
+    if args.source == "wikisource":
+        import httpx
+
+        with httpx.Client(timeout=60, follow_redirects=True,
+                          headers={"User-Agent": "xqdb/0.1"}) as client:
+            pages = fetch_pages(CORE_TITLES, client)
+        files = write_pages(pages, cfg.raw_dir)
+        print(f"ingested {len(files)} pages from wikisource")
+        return 0
+
     if args.path:
         repo = Path(args.path).resolve()
     else:
@@ -155,7 +169,7 @@ def cmd_ingest(args) -> int:
     return 0
 
 
-def _persist(conn, result, batch: str, cfg) -> None:
+def _persist(conn, result, batch: str, cfg, source: str) -> None:
     conn.execute(
         "insert or ignore into work(id, title) values (?, ?)",
         (result.work_id, result.title),
@@ -166,8 +180,8 @@ def _persist(conn, result, batch: str, cfg) -> None:
         "insert into edition"
         "(id, work_id, source_id, path, sha256, char_count, review_status,"
         " batch_id, simhash) "
-        "values (?, ?, 'daizhige', ?, ?, ?, 'pending', ?, ?)",
-        (result.edition_id, result.work_id, rel_path, result.sha256,
+        "values (?, ?, ?, ?, ?, ?, 'pending', ?, ?)",
+        (result.edition_id, result.work_id, source, rel_path, result.sha256,
          result.char_count, batch, result.simhash),
     )
     for section_index, section in enumerate(result.sections, start=1):
@@ -218,57 +232,62 @@ def _has_dependents(conn, edition_id: str) -> bool:
 
 def cmd_normalize(args) -> int:
     cfg, conn = _connect(args)
-    manifest = cfg.raw_dir / "daizhige" / "manifest.jsonl"
-    if not manifest.exists():
-        print(f"manifest not found: {manifest}")
+    manifests = sorted(cfg.raw_dir.glob("*/manifest.jsonl"))
+    if not manifests:
+        print(f"no manifest found under {cfg.raw_dir}")
         return 1
-
-    entries = [json.loads(line) for line in
-               manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
-    _ensure_source(conn, "daizhige")
 
     normalized = skipped = errors = 0
 
-    for entry in entries:
-        rel_path = entry["rel_path"]
-        base_work = work_id(Path(rel_path).stem)
-        edition = edition_id(base_work, "daizhige")
-        suffix = None
+    for manifest in manifests:
+        source = manifest.parent.name
+        entries = [json.loads(line) for line in
+                   manifest.read_text(encoding="utf-8").splitlines()
+                   if line.strip()]
+        _ensure_source(conn, source)
 
-        row = conn.execute(
-            "select sha256 from edition where id = ?", (edition,)).fetchone()
-        if row is not None:
-            same_content = row["sha256"] == entry.get("sha256")
-            if same_content and not args.force:
-                skipped += 1
-                continue
-            if not same_content:
-                suffix = hashlib.sha1(
-                    rel_path.encode("utf-8")).hexdigest()[:6]
-                edition = edition_id(f"{base_work}-{suffix}", "daizhige")
-                variant = conn.execute(
-                    "select 1 from edition where id = ?", (edition,)).fetchone()
-                if variant is not None and not args.force:
+        for entry in entries:
+            rel_path = entry["rel_path"]
+            base_work = work_id(Path(rel_path).stem)
+            edition = edition_id(base_work, source)
+            suffix = None
+
+            row = conn.execute(
+                "select sha256 from edition where id = ?",
+                (edition,)).fetchone()
+            if row is not None:
+                same_content = row["sha256"] == entry.get("sha256")
+                if same_content and not args.force:
                     skipped += 1
                     continue
-            if (args.force and not args.force_annotated
-                    and _has_dependents(conn, edition)):
-                errors += 1
-                print(
-                    f"blocked {rel_path}: edition has annotations; "
-                    "use --force-annotated to override")
-                continue
+                if not same_content:
+                    suffix = hashlib.sha1(
+                        rel_path.encode("utf-8")).hexdigest()[:6]
+                    edition = edition_id(f"{base_work}-{suffix}", source)
+                    variant = conn.execute(
+                        "select 1 from edition where id = ?",
+                        (edition,)).fetchone()
+                    if variant is not None and not args.force:
+                        skipped += 1
+                        continue
+                if (args.force and not args.force_annotated
+                        and _has_dependents(conn, edition)):
+                    errors += 1
+                    print(
+                        f"blocked {rel_path}: edition has annotations; "
+                        "use --force-annotated to override")
+                    continue
 
-        try:
-            result = normalize_file(
-                Path(entry["raw_path"]), rel_path, "daizhige", cfg.corpus_dir,
-                work_suffix=suffix)
-        except Exception as exc:  # noqa: BLE001 - keep the batch alive
-            errors += 1
-            print(f"failed {rel_path}: {exc}")
-            continue
-        _persist(conn, result, args.batch, cfg)
-        normalized += 1
+            try:
+                result = normalize_file(
+                    Path(entry["raw_path"]), rel_path, source,
+                    cfg.corpus_dir, work_suffix=suffix)
+            except Exception as exc:  # noqa: BLE001 - keep the batch alive
+                errors += 1
+                print(f"failed {rel_path}: {exc}")
+                continue
+            _persist(conn, result, args.batch, cfg, source)
+            normalized += 1
 
     conn.commit()
     conn.close()
