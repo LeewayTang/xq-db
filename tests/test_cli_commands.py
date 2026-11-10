@@ -98,3 +98,9 @@ def test_catalog_export(tmp_path):
     assert build_index_jsonl(conn, out) == 1
     text = out.read_text(encoding="utf-8")
     assert "春秋左传" in text
+
+
+def test_release_command(tmp_path):
+    _pipeline(tmp_path)
+    assert main(["--root", str(tmp_path), "release", "--tag", "data-v0.1.0"]) == 0
+    assert (tmp_path / "dist" / "data-v0.1.0" / "MANIFEST.json").exists()

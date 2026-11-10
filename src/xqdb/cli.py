@@ -10,6 +10,7 @@ from .ingest.daizhige import enumerate_corpus, fetch_repo
 from .normalize.ids import passage_id, section_id
 from .normalize.pipeline import normalize_file
 from .normalize.simplify import to_simplified
+from .release import build_release
 from .review.pipeline import review_batch
 from .store.db import connect, init_db
 
@@ -53,6 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("--grades", default="A,B")
 
     sub.add_parser("stats", parents=[common], help="语料统计")
+
+    release = sub.add_parser("release", parents=[common], help="打包数据 Release")
+    release.add_argument("--tag", required=True)
 
     return parser
 
@@ -215,6 +219,13 @@ def cmd_stats(args) -> int:
     return 0
 
 
+def cmd_release(args) -> int:
+    cfg = _cfg(args)
+    out = build_release(cfg.root, args.tag)
+    print(f"release written to {out}")
+    return 0
+
+
 COMMANDS = {
     "init": cmd_init,
     "ingest": cmd_ingest,
@@ -223,6 +234,7 @@ COMMANDS = {
     "index": cmd_index,
     "search": cmd_search,
     "stats": cmd_stats,
+    "release": cmd_release,
 }
 
 
