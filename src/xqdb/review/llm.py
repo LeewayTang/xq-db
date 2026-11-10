@@ -65,8 +65,8 @@ def review_llm_batch(conn, role, client_factory, budget, runs_dir, ctx, *,
         try:
             payload = parse_annotation(result.output)
             validate_annotation(payload, SCHEMA)
-        except Exception:  # noqa: BLE001 - invalid output writes nothing
-            continue  # noqa: S112
+        except Exception:  # noqa: BLE001, S112 - invalid output writes nothing
+            continue
 
         findings = [
             item for item in payload.get("findings", [])
