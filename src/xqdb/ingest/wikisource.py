@@ -87,6 +87,42 @@ def fetch_pages(titles: list[str], client) -> list[WikiPage]:
     return pages
 
 
+def list_subpages(title: str, client) -> list[str]:
+    response = client.get(API, params={
+        "action": "query",
+        "list": "allpages",
+        "apprefix": f"{title}/",
+        "aplimit": "max",
+        "format": "json",
+        "formatversion": "2",
+    }, headers={"User-Agent": USER_AGENT})
+    response.raise_for_status()
+    return [
+        page["title"]
+        for page in response.json().get("query", {}).get("allpages", [])
+    ]
+
+
+def fetch_documents(titles: list[str], client) -> list[WikiPage]:
+    documents: list[WikiPage] = []
+    for title in titles:
+        top = fetch_pages([title], client)
+        if not top:
+            continue
+        page = top[0]
+        subpages = list_subpages(page.title, client)
+        if not subpages:
+            documents.append(page)
+            continue
+
+        parts = []
+        for subpage in fetch_pages(subpages, client):
+            label = subpage.title.split("/", 1)[-1]
+            parts.append(f"== {label} ==\n{subpage.wikitext}")
+        documents.append(WikiPage(page.title, "\n\n".join(parts)))
+    return documents
+
+
 def safe_filename(title: str) -> str:
     return title.replace("/", "_").replace("\\", "_")
 

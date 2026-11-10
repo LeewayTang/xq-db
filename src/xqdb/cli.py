@@ -15,7 +15,7 @@ from .harness.runlog import month_to_date_cost
 from .harness.runner import Runner
 from .index.fts import rebuild_fts, search
 from .ingest.daizhige import enumerate_corpus, fetch_repo
-from .ingest.wikisource import CORE_TITLES, fetch_pages, write_pages
+from .ingest.wikisource import CORE_TITLES, fetch_documents, write_pages
 from .normalize.ids import edition_id, passage_id, section_id, work_id
 from .normalize.pipeline import normalize_file
 from .normalize.simplify import to_simplified
@@ -143,7 +143,7 @@ def cmd_ingest(args) -> int:
         import httpx
 
         with httpx.Client(timeout=60, follow_redirects=True) as client:
-            pages = fetch_pages(CORE_TITLES, client)
+            pages = fetch_documents(CORE_TITLES, client)
         files = write_pages(pages, cfg.raw_dir)
         print(f"ingested {len(files)} pages from wikisource")
         return 0

@@ -5,6 +5,7 @@ from xqdb.ingest.wikisource import (
     CORE_TITLES,
     USER_AGENT,
     WikiPage,
+    fetch_documents,
     fetch_pages,
     parse_response,
     strip_wikitext,
@@ -68,3 +69,33 @@ def test_fetch_pages_sets_ua_and_follows_redirects():
     fetch_pages(["论语"], client)
     assert client.kwargs["params"]["redirects"] == "1"
     assert USER_AGENT in client.kwargs["headers"]["User-Agent"]
+
+
+def test_fetch_documents_concatenates_subpages():
+    class Response:
+        def __init__(self, data):
+            self.data = data
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self.data
+
+    class Client:
+        def get(self, url, params=None, headers=None):
+            if params.get("list") == "allpages":
+                return Response({"query": {"allpages": [
+                    {"title": "論語/學而"}, {"title": "論語/為政"}]}})
+            titles = params["titles"].split("|")
+            pages = []
+            for title in titles:
+                text = "总目录" if title == "论语" else f"正文-{title}"
+                pages.append({"title": title if title != "论语" else "論語",
+                              "revisions": [{"slots": {"main": {"*": text}}}]})
+            return Response({"query": {"pages": pages}})
+
+    documents = fetch_documents(["论语"], Client())
+    assert len(documents) == 1
+    assert "== 學而 ==" in documents[0].wikitext
+    assert "正文-論語/學而" in documents[0].wikitext
