@@ -100,5 +100,18 @@ ANTHROPIC_API_KEY=... xqdb agent run --role researcher --task "..."
 
 真实运行受 token、工具调用次数和费用三重上限约束，日志写入 `data/runs/`。
 
+## 标注与 LLM 复核
+
+```bash
+xqdb annotate run --role annotator --limit 20 --dry-run   # 只看切块
+ANTHROPIC_API_KEY=... xqdb annotate run --role annotator --limit 20
+xqdb annotate export                                      # 导出 data/knowledge/*.jsonl
+xqdb review --llm --dry-run                               # 统计待复核版本
+ANTHROPIC_API_KEY=... xqdb review --llm --limit 10
+```
+
+标注按章节切块、逐块校验 JSON Schema、单事务幂等落库；失败可续跑。规则审核判定的
+Q 级不会被 LLM 升级。
+
 设计文档：`docs/superpowers/specs/2026-11-10-xianqin-corpus-harness-design.md`
 实施计划：`docs/superpowers/plans/2026-11-10-xqdb-p0-corpus-pipeline.md`

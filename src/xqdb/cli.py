@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from . import __version__
+from .annotate.batch import annotate_batch
+from .annotate.export import export_knowledge
 from .config import load_config
 from .harness.budget import Budget
 from .harness.client import AnthropicClient
@@ -20,6 +22,7 @@ from .normalize.ids import edition_id, passage_id, section_id, work_id
 from .normalize.pipeline import normalize_file
 from .normalize.simplify import to_simplified
 from .release import build_release
+from .review.llm import review_llm_batch
 from .review.pipeline import review_batch
 from .space.place import resolve_place
 from .space.query import passages_in_time, passages_near
@@ -66,6 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     review = sub.add_parser("review", parents=[common], help="审核并分级")
     review.add_argument("--batch", default="default")
+    review.add_argument("--llm", action="store_true")
+    review.add_argument("--limit", type=int, default=20)
+    review.add_argument("--dry-run", action="store_true")
 
     sub.add_parser("index", parents=[common], help="重建全文索引")
 
@@ -104,6 +110,18 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--max-tool-calls", type=int)
     run.add_argument("--max-cost", type=float)
 
+    annotate = sub.add_parser("annotate", parents=[common], help="语料标注")
+    annotate_sub = annotate.add_subparsers(
+        dest="annotate_command", required=True)
+    annotate_run = annotate_sub.add_parser("run", help="批量标注")
+    annotate_run.add_argument("--role", required=True)
+    annotate_run.add_argument("--limit", type=int, default=20)
+    annotate_run.add_argument("--chunk-size", type=int, default=4000)
+    annotate_run.add_argument("--dry-run", action="store_true")
+    annotate_run.add_argument("--force", action="store_true")
+    annotate_export = annotate_sub.add_parser("export", help="导出知识层")
+    annotate_export.add_argument("--out", default=None)
+
     return parser
 
 
@@ -113,6 +131,7 @@ def _cfg(args):
 
 def _connect(args):
     cfg = _cfg(args)
+    cfg.db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = connect(cfg.db_path)
     init_db(conn)
     return cfg, conn
@@ -301,6 +320,40 @@ def cmd_normalize(args) -> int:
 
 
 def cmd_review(args) -> int:
+    if args.llm:
+        if args.dry_run:
+            cfg, conn = _connect(args)
+            count = conn.execute("select count(*) from edition").fetchone()[0]
+            conn.close()
+            print(f"would review {count} editions")
+            return 0
+
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            print("ANTHROPIC_API_KEY is not set; export it or use --dry-run")
+            return 1
+
+        cfg = _cfg(args)
+        agent_cfg = load_agent_config(cfg.root)
+        roles = load_roles(
+            agent_cfg.agents_dir, schemas_dir=agent_cfg.schemas_dir)
+        role = roles.get("reviewer")
+        if role is None:
+            print("reviewer role not found")
+            return 1
+        budget = Budget(
+            role.max_tokens, role.max_tool_calls, role.max_cost_usd)
+        with tool_context(cfg.root) as ctx:
+            report = review_llm_batch(
+                ctx.conn, role,
+                lambda: AnthropicClient(
+                    agent_cfg.model, prices=agent_cfg.prices),
+                budget, agent_cfg.runs_dir, ctx, limit=args.limit)
+        print(f"llm review: checked={report.checked} "
+              f"updated={report.updated} "
+              f"findings={report.findings_written} "
+              f"stopped={report.stopped_reason}")
+        return 0
+
     cfg, conn = _connect(args)
     report = review_batch(conn, args.batch, cfg.corpus_dir)
     conn.close()
@@ -452,6 +505,51 @@ def cmd_agent(args) -> int:
     return 0 if result.status == "ok" else 1
 
 
+def cmd_annotate(args) -> int:
+    cfg = _cfg(args)
+
+    if args.annotate_command == "export":
+        cfg, conn = _connect(args)
+        out = Path(args.out) if args.out else cfg.knowledge_dir
+        counts = export_knowledge(conn, out)
+        conn.close()
+        print(" ".join(f"{key}={value}" for key, value in counts.items()))
+        return 0
+
+    agent_cfg = load_agent_config(cfg.root)
+    roles = load_roles(
+        agent_cfg.agents_dir, schemas_dir=agent_cfg.schemas_dir)
+    role = roles.get(args.role)
+    if role is None:
+        print(f"unknown role: {args.role}")
+        return 1
+
+    budget = Budget(role.max_tokens, role.max_tool_calls, role.max_cost_usd)
+    if args.dry_run:
+        with tool_context(cfg.root) as ctx:
+            result = annotate_batch(
+                ctx.conn, role, None, budget, agent_cfg.runs_dir, ctx,
+                limit=args.limit, max_chars=args.chunk_size,
+                dry_run=True, force=args.force)
+        print(f"annotate dry-run: chunks={result.processed}")
+        return 0
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        print("ANTHROPIC_API_KEY is not set; export it or use --dry-run")
+        return 1
+
+    with tool_context(cfg.root) as ctx:
+        result = annotate_batch(
+            ctx.conn, role,
+            AnthropicClient(agent_cfg.model, prices=agent_cfg.prices),
+            budget, agent_cfg.runs_dir, ctx,
+            limit=args.limit, max_chars=args.chunk_size, force=args.force)
+    print(f"annotate: processed={result.processed} ok={result.ok} "
+          f"failed={result.failed} rejected={result.rejected} "
+          f"stopped={result.stopped_reason}")
+    return 0 if result.stopped_reason is None else 1
+
+
 def cmd_release(args) -> int:
     cfg = _cfg(args)
     out = build_release(cfg.root, args.tag)
@@ -473,6 +571,7 @@ COMMANDS = {
     "when": cmd_when,
     "tools": cmd_tools,
     "agent": cmd_agent,
+    "annotate": cmd_annotate,
 }
 
 

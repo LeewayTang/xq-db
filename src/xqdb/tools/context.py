@@ -16,6 +16,7 @@ class ToolContext:
 @contextmanager
 def tool_context(root: Path | None = None):
     cfg = load_config(root)
+    cfg.db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = connect(cfg.db_path)
     init_db(conn)
     try:
