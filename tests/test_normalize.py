@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from xqdb.normalize.pipeline import normalize_file
 from xqdb.normalize.simplify import to_simplified
 

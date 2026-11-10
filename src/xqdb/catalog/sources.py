@@ -22,7 +22,7 @@ def load_sources(path: Path) -> dict[str, Source]:
     result: dict[str, Source] = {}
     for source_id, item in data.items():
         if not isinstance(item, dict):
-            raise ValueError(f"source {source_id!r} must be a mapping")
+            raise ValueError(f"source {source_id!r} must be a mapping")  # noqa: TRY004
         missing = [key for key in REQUIRED if key not in item]
         if missing:
             raise ValueError(f"source {source_id!r} missing {missing}")

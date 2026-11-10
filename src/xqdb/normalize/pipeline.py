@@ -14,10 +14,12 @@ from .simhash import simhash64
 class NormalizeResult:
     edition_id: str
     work_id: str
+    title: str
     path: Path
     char_count: int
     sha256: str
     simhash: str
+    sections: list
 
 
 def _render_body(sections) -> str:
@@ -70,8 +72,10 @@ def normalize_file(
     return NormalizeResult(
         edition_id=eid,
         work_id=wid,
+        title=title,
         path=out_path,
         char_count=char_count,
         sha256=sha,
         simhash=digest,
+        sections=parsed.sections,
     )
