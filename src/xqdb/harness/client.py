@@ -19,8 +19,8 @@ class LLMResponse:
 
 
 class LLMClient(Protocol):
-    def complete(self, *, system: str, messages: list[dict],
-                 tools: list[dict], max_tokens: int = 4096) -> LLMResponse:
+    def complete(self, messages: list[dict], *, tools: list[dict],
+                 system: str = "", max_tokens: int = 4096) -> LLMResponse:
         ...
 
 
@@ -43,20 +43,22 @@ class AnthropicClient:
         return (input_tokens * input_price
                 + output_tokens * output_price) / 1_000_000
 
-    def complete(self, *, system: str, messages: list[dict],
-                 tools: list[dict], max_tokens: int = 4096) -> LLMResponse:
+    def complete(self, messages: list[dict], *, tools: list[dict],
+                 system: str = "", max_tokens: int = 4096) -> LLMResponse:
         if self._client is None:
             import anthropic
 
             self._client = anthropic.Anthropic(api_key=self.api_key)
 
-        response = self._client.messages.create(
-            model=self.model,
-            system=system,
-            messages=messages,
-            tools=tools,
-            max_tokens=max_tokens,
-        )
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "max_tokens": max_tokens,
+        }
+        if system:
+            payload["system"] = system
+        response = self._client.messages.create(**payload)
 
         text_parts: list[str] = []
         tool_calls: list[ToolCall] = []
