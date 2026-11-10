@@ -1,0 +1,6 @@
+# 路径均相对于仓库根目录；缺省值见 src/xqdb/config.py。
+# data_dir: data
+# raw_dir: data/raw
+# corpus_dir: data/corpus
+# knowledge_dir: data/knowledge
+# db_path: data/xq_index.db

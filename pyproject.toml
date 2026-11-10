@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xqdb"
+version = "0.1.0"
+description = "先秦文献库与检索流水线"
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML>=6.0",
+    "pypinyin>=0.53",
+    "opencc-python-reimplemented>=0.1.7",
+    "zstandard>=0.23",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[project.scripts]
+xqdb = "xqdb.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
