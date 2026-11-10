@@ -1,0 +1,23 @@
+{
+  "batchcomplete": "",
+  "query": {
+    "pages": {
+      "42": {
+        "pageid": 42,
+        "ns": 0,
+        "title": "论语",
+        "revisions": [
+          {
+            "slots": {
+              "main": {
+                "contentmodel": "wikitext",
+                "contentformat": "text/x-wiki",
+                "*": "{{header\n| title = 论语\n}}\n'''论语'''\n[[学而第一]]\n子曰：学而时习之，不亦说乎。<!-- comment -->\n{{note|注}}\n"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
