@@ -19,3 +19,10 @@ def test_gb18030():
 def test_invalid_bytes_reported():
     d = decode_bytes(b"\xff\xfe\xfa\xfb")
     assert d.replacement_ratio > 0
+
+
+def test_big5_not_misdecoded_as_gb18030():
+    original = "春秋左傳鄭伯克段于鄢"
+    d = decode_bytes(original.encode("big5"))
+    assert d.text == original
+    assert d.encoding == "big5"

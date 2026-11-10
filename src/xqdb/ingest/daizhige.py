@@ -23,7 +23,7 @@ def _sha256(path: Path) -> str:
 def enumerate_corpus(root: Path) -> list[RawFile]:
     files: list[RawFile] = []
     for path in root.rglob("*.txt"):
-        if not path.is_file() or path.stat().st_size == 0:
+        if not path.is_file():
             continue
         files.append(RawFile(
             path=path,

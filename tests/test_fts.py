@@ -61,3 +61,66 @@ def test_dedupes_same_work(tmp_path):
     rebuild_fts(conn)
     hits = search(conn, "郑伯克段")
     assert len(hits) == 1
+
+
+def test_search_does_not_starve_other_works(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    conn.execute(
+        "insert into source(id,name,url,license,trust) "
+        "values('s','s','u','x','secondary')")
+    for wid, title in (("w:big", "大书"), ("w:small", "小书")):
+        conn.execute("insert into work(id,title) values(?,?)", (wid, title))
+        conn.execute(
+            "insert into edition(id,work_id,source_id,char_count,quality_grade) "
+            "values(?,?,'s',10,'A')", (f"e:{wid}", wid))
+        conn.execute(
+            "insert into section(id,edition_id,idx,title,level) "
+            "values(?,?,1,'章',1)", (f"s:{wid}", f"e:{wid}"))
+    for i in range(100):
+        conn.execute(
+            "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+            "values(?,?,?,?,?,7)",
+            (f"p:big:{i:03d}", "s:w:big", i, "郑伯克段于鄢", "郑伯克段于鄢"))
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:small:001','s:w:small',1,'郑伯克段于鄢','郑伯克段于鄢',7)")
+    conn.commit()
+    rebuild_fts(conn)
+
+    hits = search(conn, "郑伯克段", limit=20)
+    assert {hit.work for hit in hits} == {"大书", "小书"}
+
+
+def test_dedupe_prefers_higher_grade(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    conn.execute(
+        "insert into source(id,name,url,license,trust) "
+        "values('s','s','u','x','secondary')")
+    conn.execute("insert into work(id,title) values('w:m','某书')")
+    conn.execute(
+        "insert into edition(id,work_id,source_id,char_count,quality_grade) "
+        "values('e:good','w:m','s',10,'A')")
+    conn.execute(
+        "insert into edition(id,work_id,source_id,char_count,quality_grade) "
+        "values('e:bad','w:m','s',10,'B')")
+    conn.execute(
+        "insert into section(id,edition_id,idx,title,level) "
+        "values('s:good','e:good',1,'章',1)")
+    conn.execute(
+        "insert into section(id,edition_id,idx,title,level) "
+        "values('s:bad','e:bad',1,'章',1)")
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:good:001','s:good',1,'郑伯克段于鄢','郑伯克段于鄢',7)")
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:bad:001','s:bad',1,"
+        "'郑伯克段于鄢郑伯克段于鄢郑伯克段于鄢',"
+        "'郑伯克段于鄢郑伯克段于鄢郑伯克段于鄢',21)")
+    conn.commit()
+    rebuild_fts(conn)
+
+    hits = search(conn, "郑伯克段")
+    assert hits[0].passage_id == "p:good:001"

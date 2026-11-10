@@ -36,6 +36,8 @@ def normalize_file(
     rel_path: str,
     source: str,
     corpus_dir: Path,
+    *,
+    work_suffix: str | None = None,
 ) -> NormalizeResult:
     data = raw.read_bytes()
     decoded = decode_bytes(data)
@@ -43,6 +45,8 @@ def normalize_file(
     parsed = parse_daizhige_text(decoded.text, title)
 
     wid = work_id(title)
+    if work_suffix:
+        wid = f"{wid}-{work_suffix}"
     eid = edition_id(wid, source)
     sha = hashlib.sha256(data).hexdigest()
     body = _render_body(parsed.sections)

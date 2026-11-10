@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import json
 from collections.abc import Sequence
 from pathlib import Path
@@ -46,6 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
     normalize.add_argument("--batch", default="default")
     normalize.add_argument("--force", action="store_true",
                            help="覆盖已存在的版本")
+    normalize.add_argument("--force-annotated", action="store_true",
+                           help="允许覆盖已有标注/审核记录的版本")
 
     review = sub.add_parser("review", parents=[common], help="审核并分级")
     review.add_argument("--batch", default="default")
@@ -166,6 +169,31 @@ def _persist(conn, result, batch: str, cfg) -> None:
             )
 
 
+def _has_dependents(conn, edition_id: str) -> bool:
+    count = conn.execute(
+        """
+        select
+          (select count(*) from review_finding where edition_id = ?)
+        + (select count(*) from mention m
+             join passage p on p.id = m.passage_id
+             join section s on s.id = p.section_id
+             where s.edition_id = ?)
+        + (select count(*) from highlight h
+             join passage p on p.id = h.passage_id
+             join section s on s.id = p.section_id
+             where s.edition_id = ?)
+        + (select count(*) from seed_passage sp
+             join passage p on p.id = sp.passage_id
+             join section s on s.id = p.section_id
+             where s.edition_id = ?)
+        + (select count(*) from note
+             where target_type = 'edition' and target_id = ?)
+        """,
+        (edition_id, edition_id, edition_id, edition_id, edition_id),
+    ).fetchone()[0]
+    return count > 0
+
+
 def cmd_normalize(args) -> int:
     cfg, conn = _connect(args)
     manifest = cfg.raw_dir / "daizhige" / "manifest.jsonl"
@@ -177,24 +205,47 @@ def cmd_normalize(args) -> int:
                manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
     _ensure_source(conn, "daizhige")
 
-    existing = {row[0] for row in conn.execute("select id from edition")}
     normalized = skipped = errors = 0
 
     for entry in entries:
         rel_path = entry["rel_path"]
-        expected_id = edition_id(work_id(Path(rel_path).stem), "daizhige")
-        if expected_id in existing and not args.force:
-            skipped += 1
-            continue
+        base_work = work_id(Path(rel_path).stem)
+        edition = edition_id(base_work, "daizhige")
+        suffix = None
+
+        row = conn.execute(
+            "select sha256 from edition where id = ?", (edition,)).fetchone()
+        if row is not None:
+            same_content = row["sha256"] == entry.get("sha256")
+            if same_content and not args.force:
+                skipped += 1
+                continue
+            if not same_content:
+                suffix = hashlib.sha1(
+                    rel_path.encode("utf-8")).hexdigest()[:6]
+                edition = edition_id(f"{base_work}-{suffix}", "daizhige")
+                variant = conn.execute(
+                    "select 1 from edition where id = ?", (edition,)).fetchone()
+                if variant is not None and not args.force:
+                    skipped += 1
+                    continue
+            if (args.force and not args.force_annotated
+                    and _has_dependents(conn, edition)):
+                errors += 1
+                print(
+                    f"blocked {rel_path}: edition has annotations; "
+                    "use --force-annotated to override")
+                continue
+
         try:
             result = normalize_file(
-                Path(entry["raw_path"]), rel_path, "daizhige", cfg.corpus_dir)
+                Path(entry["raw_path"]), rel_path, "daizhige", cfg.corpus_dir,
+                work_suffix=suffix)
         except Exception as exc:  # noqa: BLE001 - keep the batch alive
             errors += 1
             print(f"failed {rel_path}: {exc}")
             continue
         _persist(conn, result, args.batch, cfg)
-        existing.add(expected_id)
         normalized += 1
 
     conn.commit()

@@ -60,34 +60,61 @@ def search(
 
     if len(query) < 3:
         sql = f"""
-            select p.id as passage_id, w.title as work, s.title as section,
-                   p.text as text, 0.0 as score, e.work_id as work_id
-            from passage p
-            join section s on s.id = p.section_id
-            join edition e on e.id = s.edition_id
-            join work w on w.id = e.work_id
-            where p.text_norm like ?
-              and e.quality_grade in ({_placeholders(grades)})
-            order by p.id
+            with hits as (
+                select p.id as passage_id, w.title as work,
+                       s.title as section, p.text as text, 0.0 as score,
+                       e.work_id as work_id,
+                       case e.quality_grade
+                           when 'A' then 0 when 'B' then 1
+                           when 'C' then 2 when 'Q' then 3 else 4 end
+                           as grade_rank
+                from passage p
+                join section s on s.id = p.section_id
+                join edition e on e.id = s.edition_id
+                join work w on w.id = e.work_id
+                where p.text_norm like ?
+                  and e.quality_grade in ({_placeholders(grades)})
+            ), ranked as (
+                select *, row_number() over (
+                    partition by work_id
+                    order by grade_rank, passage_id) as rn
+                from hits
+            )
+            select passage_id, work, section, text, score, work_id
+            from ranked where rn = 1
+            order by grade_rank, passage_id
             limit ?
         """
-        params = [f"%{query}%", *grades, limit * 3]
+        params = [f"%{query}%", *grades, limit]
     else:
         match = '"' + query.replace('"', '""') + '"'
         sql = f"""
-            select p.id as passage_id, w.title as work, s.title as section,
-                   p.text as text, bm25(passage_fts) as score,
-                   e.work_id as work_id
-            from passage_fts
-            join passage p on p.id = passage_fts.passage_id
-            join section s on s.id = p.section_id
-            join edition e on e.id = s.edition_id
-            join work w on w.id = e.work_id
-            where passage_fts match ?
-              and e.quality_grade in ({_placeholders(grades)})
-            order by score
+            with hits as (
+                select p.id as passage_id, w.title as work,
+                       s.title as section, p.text as text,
+                       bm25(passage_fts) as score, e.work_id as work_id,
+                       case e.quality_grade
+                           when 'A' then 0 when 'B' then 1
+                           when 'C' then 2 when 'Q' then 3 else 4 end
+                           as grade_rank
+                from passage_fts
+                join passage p on p.id = passage_fts.passage_id
+                join section s on s.id = p.section_id
+                join edition e on e.id = s.edition_id
+                join work w on w.id = e.work_id
+                where passage_fts match ?
+                  and e.quality_grade in ({_placeholders(grades)})
+            ), ranked as (
+                select *, row_number() over (
+                    partition by work_id
+                    order by grade_rank, score, passage_id) as rn
+                from hits
+            )
+            select passage_id, work, section, text, score, work_id
+            from ranked where rn = 1
+            order by grade_rank, score
             limit ?
         """
-        params = [match, *grades, limit * 3]
+        params = [match, *grades, limit]
 
     return _rows_to_hits(conn.execute(sql, params).fetchall(), limit)

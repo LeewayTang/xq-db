@@ -155,3 +155,44 @@ def test_catalog_prefers_best_grade(tmp_path):
     build_index_jsonl(conn, out)
     row = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
     assert row["best_grade"] == "A"
+
+
+def test_force_refuses_when_review_findings_exist(tmp_path):
+    db = _pipeline(tmp_path)
+    conn = connect(db)
+    conn.execute("delete from review_finding")
+    edition_id = conn.execute("select id from edition").fetchone()[0]
+    conn.execute(
+        "insert into review_finding(edition_id,kind,severity,decided_at) "
+        "values(?, 'low_information', 'warn', 'now')", (edition_id,))
+    conn.commit()
+    conn.close()
+
+    assert main(["--root", str(tmp_path), "normalize", "--force"]) == 1
+    conn = connect(db)
+    assert conn.execute(
+        "select count(*) from edition where id = ?", (edition_id,)
+    ).fetchone()[0] == 1
+    assert conn.execute("select count(*) from review_finding").fetchone()[0] == 1
+
+
+def test_same_title_different_content_get_distinct_works(tmp_path):
+    _project(tmp_path)
+    repo = tmp_path / "rawsrc"
+    first = repo / "子藏" / "甲" / "春秋.txt"
+    second = repo / "子藏" / "乙" / "春秋.txt"
+    first.parent.mkdir(parents=True)
+    second.parent.mkdir(parents=True)
+    first.write_text("◇甲\n" + LONG + "\n", encoding="utf-8")
+    second.write_text(
+        "◇乙\n" + "".join(chr(0x6000 + i) for i in range(200)) + "。\n",
+        encoding="utf-8")
+
+    assert main(["--root", str(tmp_path), "init"]) == 0
+    assert main(["--root", str(tmp_path), "ingest", "daizhige",
+                 "--path", str(repo)]) == 0
+    assert main(["--root", str(tmp_path), "normalize"]) == 0
+
+    conn = connect(tmp_path / "data" / "xq_index.db")
+    assert conn.execute("select count(*) from work").fetchone()[0] == 2
+    assert conn.execute("select count(*) from edition").fetchone()[0] == 2

@@ -1,3 +1,4 @@
+import hashlib
 import subprocess
 
 from xqdb.ingest.daizhige import enumerate_corpus, fetch_repo
@@ -13,9 +14,11 @@ def test_enumerates_txt_only(tmp_path):
     assert len(files[0].sha256) == 64
 
 
-def test_skips_empty_files(tmp_path):
+def test_keeps_empty_files_for_review(tmp_path):
     (tmp_path / "a.txt").write_bytes(b"")
-    assert enumerate_corpus(tmp_path) == []
+    files = enumerate_corpus(tmp_path)
+    assert len(files) == 1 and files[0].size == 0
+    assert files[0].sha256 == hashlib.sha256(b"").hexdigest()
 
 
 def test_fetch_repo_clones_once(tmp_path):
