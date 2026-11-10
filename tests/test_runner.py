@@ -64,3 +64,30 @@ def test_runner_stops_on_budget(ctx, tmp_path):
                     tmp_path / "runs", ctx=ctx).run("x")
     assert result.status == "budget_exceeded"
     assert (result.log_path / "run.json").exists()
+
+
+def test_answer_citations_exist_in_corpus(ctx, tmp_path):
+    from xqdb.tools.corpus import get_passage
+
+    client = FakeClient([
+        LLMResponse("", [ToolCall("search_keyword",
+                                  {"query": "郑伯克段"}, "t1")], 5, 5, 0.0),
+        LLMResponse("", [ToolCall("search_keyword",
+                                  {"query": "郑伯克段"}, "t2")], 5, 5, 0.0),
+        LLMResponse("见 [p:z:1:001]", [], 5, 5, 0.0),
+    ])
+    result = Runner(_role(), TOOL_SPECS, client, Budget(1000, 5, 1.0),
+                    tmp_path / "runs", ctx=ctx).run("查")
+    assert result.citations == ["p:z:1:001"]
+    for passage_id in result.citations:
+        assert get_passage(ctx, passage_id).get("error") is None
+
+
+def test_runner_flags_unknown_citations(ctx, tmp_path):
+    client = FakeClient([
+        LLMResponse("见 [p:does-not-exist]", [], 5, 5, 0.0),
+    ])
+    result = Runner(_role(), TOOL_SPECS, client, Budget(1000, 5, 1.0),
+                    tmp_path / "runs", ctx=ctx).run("查")
+    assert result.status == "citation_error"
+    assert result.invalid_citations == ["p:does-not-exist"]

@@ -1,6 +1,7 @@
 import json
+import re
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from .runlog import RunLog
 
 MAX_TURNS = 8
 CITATION_RULE = "每条结论必须附 passage_id；没有出处的判断必须标注为推断。"
+CITATION_PATTERN = re.compile(r"(?<![A-Za-z0-9_:-])(p:[A-Za-z0-9:_-]+)")
 
 
 @dataclass(frozen=True)
@@ -19,6 +21,7 @@ class RunResult:
     tool_calls: list[dict]
     usage: dict
     log_path: Path
+    invalid_citations: list[str] = field(default_factory=list)
 
 
 def _collect_citations(value, out: list[str]) -> None:
@@ -57,7 +60,8 @@ class Runner:
 
     def _log(self, run_id: str, status: str, task: str,
              messages: list[dict], tool_calls: list[dict],
-             citations: list[str]) -> Path:
+             citations: list[str],
+             invalid_citations: list[str]) -> Path:
         log = RunLog(self.run_dir, run_id)
         log.write({
             "run_id": run_id,
@@ -67,6 +71,7 @@ class Runner:
             "messages": messages,
             "tool_calls": tool_calls,
             "citations": citations,
+            "invalid_citations": invalid_citations,
             "usage": {
                 "tokens": self.budget.tokens,
                 "tool_calls": self.budget.tool_calls,
@@ -143,8 +148,22 @@ class Runner:
             status = "budget_exceeded"
             output = f"budget exceeded: {exc.limit}"
 
+        invalid: list[str] = []
+        for match in CITATION_PATTERN.findall(output):
+            if match not in citations:
+                citations.append(match)
+        if self.ctx is not None:
+            for passage_id in citations:
+                exists = self.ctx.conn.execute(
+                    "select 1 from passage where id = ?", (passage_id,)
+                ).fetchone()
+                if exists is None:
+                    invalid.append(passage_id)
+            if invalid:
+                status = "citation_error"
+
         log_path = self._log(
-            run_id, status, task, messages, called, citations)
+            run_id, status, task, messages, called, citations, invalid)
         return RunResult(
             status=status,
             output=output,
@@ -156,4 +175,5 @@ class Runner:
                 "cost_usd": self.budget.cost_usd,
             },
             log_path=log_path,
+            invalid_citations=invalid,
         )
