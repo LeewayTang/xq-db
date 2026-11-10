@@ -1,0 +1,35 @@
+{
+  "type": "object",
+  "required": [
+    "seeds"
+  ],
+  "properties": {
+    "seeds": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "title",
+          "premise"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "premise": {
+            "type": "string"
+          },
+          "passage_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_fiction": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

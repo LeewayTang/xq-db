@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "required": [
+    "answer",
+    "citations"
+  ],
+  "properties": {
+    "answer": {
+      "type": "string"
+    },
+    "citations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

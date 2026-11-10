@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "required": [
+    "works"
+  ],
+  "properties": {
+    "works": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "work_id"
+        ],
+        "properties": {
+          "work_id": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string"
+          },
+          "era": {
+            "type": "string"
+          },
+          "genre": {
+            "type": "string"
+          },
+          "relevance": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
