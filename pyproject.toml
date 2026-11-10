@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
+mcp = ["mcp>=1.0,<2"]
 
 [project.scripts]
 xqdb = "xqdb.cli:main"
