@@ -92,6 +92,21 @@ def test_search_does_not_starve_other_works(tmp_path):
     assert {hit.work for hit in hits} == {"大书", "小书"}
 
 
+def test_rebuild_fts_streams_in_batches(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    _seed(conn)
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:z:1:002','s:z:1',2,'郑伯克段于鄢二','郑伯克段于鄢二',8)")
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:z:1:003','s:z:1',3,'郑伯克段于鄢三','郑伯克段于鄢三',8)")
+    conn.commit()
+    assert rebuild_fts(conn, batch_size=2) == 3
+    assert search(conn, "郑伯克段")
+
+
 def test_dedupe_prefers_higher_grade(tmp_path):
     conn = connect(tmp_path / "x.db")
     init_db(conn)

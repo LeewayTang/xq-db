@@ -12,15 +12,32 @@ class Hit:
     score: float
 
 
-def rebuild_fts(conn) -> int:
-    rows = conn.execute("select id, text_norm from passage").fetchall()
+def rebuild_fts(conn, *, batch_size: int = 10000) -> int:
     conn.execute("delete from passage_fts")
-    conn.executemany(
-        "insert into passage_fts(passage_id, text_norm) values (?, ?)",
-        [(row["id"], row["text_norm"]) for row in rows],
-    )
     conn.commit()
-    return len(rows)
+
+    count = 0
+    batch: list[tuple[str, str]] = []
+    for row in conn.execute("select id, text_norm from passage"):
+        batch.append((row["id"], row["text_norm"]))
+        if len(batch) >= batch_size:
+            conn.executemany(
+                "insert into passage_fts(passage_id, text_norm) values (?, ?)",
+                batch,
+            )
+            conn.commit()
+            count += len(batch)
+            batch.clear()
+
+    if batch:
+        conn.executemany(
+            "insert into passage_fts(passage_id, text_norm) values (?, ?)",
+            batch,
+        )
+        conn.commit()
+        count += len(batch)
+
+    return count
 
 
 def _placeholders(values) -> str:
