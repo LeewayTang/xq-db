@@ -44,6 +44,7 @@ def seed_add(ctx, title: str, premise: str,
              passage_ids: tuple[str, ...] = ()) -> dict:
     created_at = datetime.now(UTC).isoformat()
     seed_id = None
+    failing = None
     try:
         with ctx.conn:
             cursor = ctx.conn.execute(
@@ -53,13 +54,14 @@ def seed_add(ctx, title: str, premise: str,
             )
             seed_id = cursor.lastrowid
             for passage_id in passage_ids:
+                failing = passage_id
                 ctx.conn.execute(
                     "insert into seed_passage(seed_id, passage_id) "
                     "values (?, ?)",
                     (seed_id, passage_id),
                 )
-    except sqlite3.IntegrityError:
-        return {"error": "invalid passage_id", "passage_id": passage_id}
+    except sqlite3.Error:
+        return {"error": "invalid passage_id", "passage_id": failing}
 
     return {
         "id": seed_id,

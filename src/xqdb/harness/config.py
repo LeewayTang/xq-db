@@ -11,6 +11,7 @@ class AgentConfig:
     runs_dir: Path
     agents_dir: Path
     schemas_dir: Path
+    prices: dict[str, tuple[float, float]]
 
 
 def load_agent_config(root: Path | None = None) -> AgentConfig:
@@ -31,4 +32,8 @@ def load_agent_config(root: Path | None = None) -> AgentConfig:
         runs_dir=resolve("runs_dir", "data/runs"),
         agents_dir=resolve("agents_dir", "agents"),
         schemas_dir=resolve("schemas_dir", "schemas/agents"),
+        prices={
+            name: (float(values[0]), float(values[1]))
+            for name, values in (agent.get("prices") or {}).items()
+        },
     )

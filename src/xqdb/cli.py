@@ -11,6 +11,7 @@ from .harness.budget import Budget
 from .harness.client import AnthropicClient
 from .harness.config import load_agent_config
 from .harness.roles import load_roles
+from .harness.runlog import month_to_date_cost
 from .harness.runner import Runner
 from .index.fts import rebuild_fts, search
 from .ingest.daizhige import enumerate_corpus, fetch_repo
@@ -404,6 +405,12 @@ def cmd_agent(args) -> int:
         print("ANTHROPIC_API_KEY is not set; export it or use --dry-run")
         return 1
 
+    spent = month_to_date_cost(cfg.runs_dir)
+    if spent + role.max_cost_usd > cfg.monthly_budget_usd:
+        print(f"monthly budget exceeded: spent ${spent:.2f}, "
+              f"cap ${cfg.monthly_budget_usd:.2f}")
+        return 1
+
     budget = Budget(
         max_tokens=args.max_tokens or role.max_tokens,
         max_tool_calls=args.max_tool_calls or role.max_tool_calls,
@@ -413,7 +420,7 @@ def cmd_agent(args) -> int:
     root = Path(args.root) if args.root else None
     with tool_context(root) as ctx:
         result = Runner(
-            role, TOOL_SPECS, AnthropicClient(cfg.model), budget,
+            role, TOOL_SPECS, AnthropicClient(cfg.model, prices=cfg.prices), budget,
             cfg.runs_dir, ctx=ctx).run(args.task)
     print(result.output)
     print(f"status={result.status} citations={result.citations} "

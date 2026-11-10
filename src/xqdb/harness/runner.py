@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from ..tools.registry import tool_schema
 from .budget import Budget, BudgetExceeded
 from .runlog import RunLog
 
@@ -53,7 +54,7 @@ class Runner:
             {
                 "name": name,
                 "description": self.tool_specs[name].description,
-                "input_schema": {"type": "object"},
+                "input_schema": tool_schema(self.tool_specs[name].func),
             }
             for name in self.role.tools
         ]
@@ -147,6 +148,9 @@ class Runner:
         except BudgetExceeded as exc:
             status = "budget_exceeded"
             output = f"budget exceeded: {exc.limit}"
+        except Exception as exc:  # noqa: BLE001 - every failure must be logged
+            status = "error"
+            output = f"{type(exc).__name__}: {exc}"
 
         invalid: list[str] = []
         for match in CITATION_PATTERN.findall(output):
@@ -159,7 +163,7 @@ class Runner:
                 ).fetchone()
                 if exists is None:
                     invalid.append(passage_id)
-            if invalid:
+            if invalid and status == "ok":
                 status = "citation_error"
 
         log_path = self._log(

@@ -14,3 +14,9 @@ def test_seed_links_passages(ctx):
     rows = seed_list(ctx)
     assert rows[0]["title"] == "兄弟相残"
     assert rows[0]["passages"] == ["p:z:1:001"]
+
+
+def test_seed_add_invalid_passage_returns_error(ctx):
+    result = seed_add(ctx, "坏种子", "x", ("p:nope",))
+    assert result["error"] == "invalid passage_id"
+    assert ctx.conn.execute("select count(*) from story_seed").fetchone()[0] == 0

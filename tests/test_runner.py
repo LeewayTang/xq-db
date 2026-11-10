@@ -91,3 +91,22 @@ def test_runner_flags_unknown_citations(ctx, tmp_path):
                     tmp_path / "runs", ctx=ctx).run("查")
     assert result.status == "citation_error"
     assert result.invalid_citations == ["p:does-not-exist"]
+
+
+def test_runner_advertises_tool_parameters(ctx, tmp_path):
+    runner = Runner(_role(), TOOL_SPECS, FakeClient([]), Budget(10, 1, 1.0),
+                    tmp_path / "runs", ctx=ctx)
+    defs = {item["name"]: item for item in runner._tool_defs()}
+    schema = defs["search_keyword"]["input_schema"]
+    assert schema["properties"]["query"]["type"] == "string"
+    assert "query" in schema["required"]
+
+
+def test_runner_writes_log_on_tool_error(ctx, tmp_path):
+    client = FakeClient([
+        LLMResponse("", [ToolCall("search_keyword", {}, "t1")], 1, 1, 0.0),
+    ])
+    result = Runner(_role(), TOOL_SPECS, client, Budget(100, 5, 1.0),
+                    tmp_path / "runs", ctx=ctx).run("查")
+    assert result.status == "error"
+    assert (result.log_path / "run.json").exists()

@@ -1,3 +1,6 @@
+import inspect
+import types
+import typing
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -6,6 +9,50 @@ from .corpus import corpus_stats, get_passage, get_work, list_works
 from .knowledge import entity_lookup, timeline
 from .personal import note_add, note_search, seed_add, seed_list
 from .search import search_hybrid, search_keyword, search_semantic
+
+
+def _json_type(annotation) -> dict:
+    if annotation is inspect.Parameter.empty:
+        return {}
+    origin = typing.get_origin(annotation)
+    if origin in (types.UnionType, typing.Union):
+        args = [arg for arg in typing.get_args(annotation)
+                if arg is not type(None)]
+        return _json_type(args[0]) if args else {}
+    if annotation is str:
+        return {"type": "string"}
+    if annotation is int:
+        return {"type": "integer"}
+    if annotation is float:
+        return {"type": "number"}
+    if annotation is bool:
+        return {"type": "boolean"}
+    if origin in (tuple, list, set):
+        args = typing.get_args(annotation)
+        return {"type": "array", "items": _json_type(args[0]) if args else {}}
+    if annotation is dict:
+        return {"type": "object"}
+    return {}
+
+
+def tool_schema(func: Callable) -> dict:
+    properties: dict[str, dict] = {}
+    required: list[str] = []
+    for name, parameter in inspect.signature(func).parameters.items():
+        if name in ("ctx", "self"):
+            continue
+        if parameter.kind in (parameter.VAR_KEYWORD, parameter.VAR_POSITIONAL):
+            continue
+        schema = _json_type(parameter.annotation)
+        if parameter.default is not inspect.Parameter.empty:
+            schema = dict(schema, default=parameter.default)
+        else:
+            required.append(name)
+        properties[name] = schema
+    result: dict = {"type": "object", "properties": properties}
+    if required:
+        result["required"] = required
+    return result
 
 
 @dataclass(frozen=True)

@@ -28,3 +28,28 @@ def test_unknown_tool_rejected(tmp_path):
         "---\n", encoding="utf-8")
     with pytest.raises(ValueError):
         load_roles(tmp_path / "agents")
+
+
+def _admin_role(tmp_path, allow_admin: bool):
+    (tmp_path / "agents").mkdir()
+    (tmp_path / "schemas" / "agents").mkdir(parents=True)
+    (tmp_path / "schemas" / "agents" / "x.schema.json").write_text(
+        "{\"type\": \"object\"}", encoding="utf-8")
+    flag = "\nallow_admin: true" if allow_admin else ""
+    (tmp_path / "agents" / "x.md").write_text(
+        "---\nrole: x\ntools: [ingest_run]\n"
+        "output_schema: x.schema.json\n"
+        "budget: {max_tokens: 100, max_tool_calls: 1, max_cost_usd: 0.1}"
+        f"{flag}\n---\n", encoding="utf-8")
+
+
+def test_admin_tool_rejected_by_default(tmp_path):
+    _admin_role(tmp_path, allow_admin=False)
+    with pytest.raises(ValueError):
+        load_roles(tmp_path / "agents")
+
+
+def test_admin_tool_allowed_with_flag(tmp_path):
+    _admin_role(tmp_path, allow_admin=True)
+    role = load_role(tmp_path / "agents", "x")
+    assert role.tools == ("ingest_run",)

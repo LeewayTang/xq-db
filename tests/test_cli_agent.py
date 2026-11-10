@@ -1,3 +1,4 @@
+import json
 import shutil
 from pathlib import Path
 
@@ -40,3 +41,25 @@ def test_agent_run_without_key_reports_clearly(tmp_path, capsys, monkeypatch):
     assert main(["--root", str(root), "agent", "run",
                  "--role", "researcher", "--task", "x"]) == 1
     assert "ANTHROPIC_API_KEY" in capsys.readouterr().out
+
+
+def test_agent_run_respects_monthly_budget(tmp_path, capsys, monkeypatch):
+    from datetime import UTC, datetime
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    root = _with_agents(tmp_path)
+    (root / "config").mkdir()
+    (root / "config" / "config.yaml").write_text(
+        "agent:\n  monthly_budget_usd: 0.01\n", encoding="utf-8")
+
+    now = datetime.now(UTC)
+    run_id = now.strftime("%Y%m") + "01T000000000000-a"
+    directory = root / "data" / "runs" / run_id
+    directory.mkdir(parents=True)
+    (directory / "run.json").write_text(
+        json.dumps({"run_id": run_id, "usage": {"cost_usd": 0.5}}),
+        encoding="utf-8")
+
+    assert main(["--root", str(root), "agent", "run",
+                 "--role", "researcher", "--task", "x"]) == 1
+    assert "monthly budget" in capsys.readouterr().out.lower()

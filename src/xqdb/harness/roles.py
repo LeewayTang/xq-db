@@ -3,7 +3,7 @@ from pathlib import Path
 
 import yaml
 
-from ..tools.registry import TOOL_NAMES
+from ..tools.registry import TOOL_SPECS
 
 BUDGET_KEYS = ("max_tokens", "max_tool_calls", "max_cost_usd")
 
@@ -19,6 +19,7 @@ class AgentRole:
     max_cost_usd: float
     fresh_context: bool
     prompt: str
+    allow_admin: bool = False
 
 
 def _parse_role(path: Path, schemas_dir: Path) -> AgentRole:
@@ -33,9 +34,14 @@ def _parse_role(path: Path, schemas_dir: Path) -> AgentRole:
         raise ValueError(f"{path}: role {name!r} does not match filename")
 
     tools = tuple(meta.get("tools") or ())
-    unknown = [tool for tool in tools if tool not in TOOL_NAMES]
-    if unknown:
-        raise ValueError(f"{path}: unknown tools {unknown}")
+    allow_admin = bool(meta.get("allow_admin", False))
+    for tool in tools:
+        spec = TOOL_SPECS.get(tool)
+        if spec is None:
+            raise ValueError(f"{path}: unknown tool {tool!r}")
+        if spec.admin and not allow_admin:
+            raise ValueError(
+                f"{path}: admin tool {tool!r} requires allow_admin: true")
 
     budget = meta.get("budget") or {}
     for key in BUDGET_KEYS:
@@ -57,6 +63,7 @@ def _parse_role(path: Path, schemas_dir: Path) -> AgentRole:
         max_cost_usd=float(budget["max_cost_usd"]),
         fresh_context=bool(meta.get("fresh_context", True)),
         prompt=body.strip(),
+        allow_admin=allow_admin,
     )
 
 
