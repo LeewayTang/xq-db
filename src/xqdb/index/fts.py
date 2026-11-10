@@ -10,6 +10,7 @@ class Hit:
     section: str
     text: str
     score: float
+    work_id: str = ""
 
 
 def _write_batch(conn, batch: list[tuple[str, str]]) -> None:
@@ -116,7 +117,7 @@ def search(
                 order by grade_rank, score, section_id) as rn
             from hits
         )
-        select section_id, work, section, score
+        select section_id, work, section, score, work_id
         from ranked where rn = 1
         order by score, grade_rank
         limit ?
@@ -134,5 +135,6 @@ def search(
             section=row["section"],
             text=passage["text"],
             score=float(row["score"]),
+            work_id=row["work_id"],
         ))
     return hits
