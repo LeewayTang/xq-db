@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS passage (
 
 CREATE INDEX IF NOT EXISTS idx_passage_section ON passage(section_id);
 
+CREATE INDEX IF NOT EXISTS idx_passage_section_idx
+    ON passage(section_id, idx);
+
 CREATE TABLE IF NOT EXISTS review_finding (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     edition_id  TEXT NOT NULL REFERENCES edition(id) ON DELETE CASCADE,
