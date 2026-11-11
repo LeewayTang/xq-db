@@ -13,5 +13,7 @@ when:        ; xqdb when $(START) $(END)
 release:     ; xqdb release --tag $(TAG)
 test:        ; $(PY) -m pytest -q
 lint:        ; $(PY) -m ruff check src tests
+context:     ; $(PY) scripts/context-usage.py
+handoff:     ; $(PY) scripts/handoff.py new "$(SLUG)" --next "$(NEXT)"
 
-.PHONY: install init ingest normalize review index search place near when release test lint
+.PHONY: install init ingest normalize review index search place near when release test lint context handoff

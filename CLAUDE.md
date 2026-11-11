@@ -41,16 +41,11 @@
 
 ## 上下文预算与 handoff
 
-- 长程任务开始前检查上下文占用；达到 70% 或收到压缩提示时，先停在工作单元边界。
-- 写 `docs/superpowers/handoffs/HANDOFF-YYYYMMDD-HHMMSS-<slug>.md`，包含：
-  1. 目标与当前阶段；
-  2. 已完成项及证据（提交、测试、产物路径）；
-  3. 进行中、尚未落盘的工作；
-  4. 已定决策；
-  5. 未决问题；
-  6. 下一步动作与相关文件。
-- 同一提交内更新 `HANDOFF-LATEST.md` 指针，旧 handoff 标 `superseded`。
-- 恢复时读 handoff 文件并用 `git log --oneline -5`、`git status --short` 校验，**不从对话摘要恢复**。
+- 长程任务开始前运行 `python3 scripts/context-usage.py`（或 `make context`）；`--json` 输出机器可读结果。注意 system prompt 里的 `<total_tokens>` 是总预算，不是上下文占用。
+- 达到 70% 或收到压缩提示时，先停在工作单元边界，运行：
+  `python3 scripts/handoff.py new <slug> --next "<下一步>" --trigger pre-compact`
+- handoff 文件位于 `docs/superpowers/handoffs/HANDOFF-YYYYMMDD-HHMMSS-<slug>.md`，脚本会同步更新 `HANDOFF-LATEST.md` 和 `HANDOFFS.md`。
+- 恢复时运行 `python3 scripts/handoff.py resolve`，读目标文件全文，并用 `git log --oneline -5`、`git status --short` 校验；**不从对话摘要恢复**。
 
 ## 门 2 · 并行化评估（每次都要做）
 
