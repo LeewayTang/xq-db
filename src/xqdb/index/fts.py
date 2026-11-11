@@ -1,4 +1,6 @@
+import hashlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from ..normalize.simplify import to_simplified
 
@@ -21,38 +23,84 @@ def _write_batch(conn, batch: list[tuple[str, str]]) -> None:
     conn.commit()
 
 
-def rebuild_fts(conn, *, batch_size: int = 1000) -> int:
-    """Index one row per section; passages are resolved after matching."""
-    conn.execute("delete from section_fts")
-    conn.commit()
-
-    count = 0
-    batch: list[tuple[str, str]] = []
+def _iter_sections(conn):
     current: str | None = None
     parts: list[str] = []
-
-    def flush_section() -> None:
-        nonlocal count
-        if current is None:
-            return
-        batch.append((current, "\n".join(parts)))
-        count += 1
-
     for row in conn.execute(
-            "select section_id, text_norm from passage order by section_id, idx"):
-        if row["section_id"] != current:
-            flush_section()
-            if len(batch) >= batch_size:
-                _write_batch(conn, batch)
-                batch.clear()
-            current = row["section_id"]
+            "select section_id, text_norm from passage "
+            "order by section_id, idx"):
+        sid = row["section_id"]
+        if sid != current:
+            if current is not None:
+                yield current, "\n".join(parts)
+            current = sid
             parts = [row["text_norm"]]
         else:
             parts.append(row["text_norm"])
+    if current is not None:
+        yield current, "\n".join(parts)
 
-    flush_section()
+
+def rebuild_fts(conn, *, batch_size: int = 1000,
+                incremental: bool = False) -> int:
+    """Index one row per section; passages are resolved after matching.
+
+    With incremental=True, only sections whose text hash changed are
+    re-indexed. This keeps adding a few sources from rewriting the 4.9 GB
+    section text.
+    """
+    if incremental:
+        known = {
+            row["section_id"]: row["text_hash"]
+            for row in conn.execute(
+                "select section_id, text_hash from section_index_state")
+        }
+    else:
+        conn.execute("delete from section_fts")
+        conn.execute("delete from section_index_state")
+        conn.commit()
+        known = None
+
+    now = datetime.now(UTC).isoformat()
+    count = 0
+    seen: set[str] = set()
+    batch: list[tuple[str, str]] = []
+
+    for section_id, text in _iter_sections(conn):
+        seen.add(section_id)
+        digest = hashlib.sha1(text.encode("utf-8")).hexdigest()
+        if known is not None and known.get(section_id) == digest:
+            continue
+
+        if known is not None:
+            conn.execute(
+                "delete from section_fts where section_id = ?", (section_id,))
+        batch.append((section_id, text))
+        conn.execute(
+            "insert into section_index_state"
+            "(section_id, text_hash, indexed_at) values (?, ?, ?) "
+            "on conflict(section_id) do update set "
+            "text_hash = excluded.text_hash, indexed_at = excluded.indexed_at",
+            (section_id, digest, now),
+        )
+        count += 1
+        if len(batch) >= batch_size:
+            _write_batch(conn, batch)
+            batch.clear()
+
     if batch:
         _write_batch(conn, batch)
+
+    if known is not None:
+        stale = [section_id for section_id in known if section_id not in seen]
+        if stale:
+            conn.executemany(
+                "delete from section_fts where section_id = ?",
+                [(section_id,) for section_id in stale])
+            conn.executemany(
+                "delete from section_index_state where section_id = ?",
+                [(section_id,) for section_id in stale])
+            conn.commit()
 
     return count
 

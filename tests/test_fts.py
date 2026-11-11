@@ -107,6 +107,24 @@ def test_rebuild_indexes_each_section_once(tmp_path):
     assert search(conn, "郑伯克段")
 
 
+def test_incremental_reindex_skips_unchanged_sections(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    _seed(conn)
+    assert rebuild_fts(conn, incremental=True) == 1
+    assert rebuild_fts(conn, incremental=True) == 0
+
+    conn.execute(
+        "insert into section(id,edition_id,idx,title,level) "
+        "values('s:z:2','e:z',2,'隐公二年',1)")
+    conn.execute(
+        "insert into passage(id,section_id,idx,text,text_norm,char_count) "
+        "values('p:z:2:001','s:z:2',1,'公会戎于潜','公会戎于潜',6)")
+    conn.commit()
+    assert rebuild_fts(conn, incremental=True) == 1
+    assert search(conn, "公会戎于潜")
+
+
 def test_search_returns_matching_passage_inside_section(tmp_path):
     conn = connect(tmp_path / "x.db")
     init_db(conn)

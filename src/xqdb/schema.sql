@@ -286,5 +286,11 @@ CREATE TABLE IF NOT EXISTS annotation_state (
 CREATE INDEX IF NOT EXISTS idx_annotation_state_section
     ON annotation_state(section_id, status);
 
+CREATE TABLE IF NOT EXISTS section_index_state (
+    section_id  TEXT PRIMARY KEY REFERENCES section(id) ON DELETE CASCADE,
+    text_hash   TEXT NOT NULL,
+    indexed_at  TEXT NOT NULL
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS section_fts
     USING fts5(section_id UNINDEXED, text_norm, tokenize='trigram');
