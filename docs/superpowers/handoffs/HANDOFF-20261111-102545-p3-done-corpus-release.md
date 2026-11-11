@@ -3,7 +3,8 @@ handoff_id: 20261111-102545
 created: 2026-11-11T10:25:45+08:00
 session: 1b304fd7-9754-4d6d-9a83-5f8ae28c8527
 trigger: manual
-status: active
+status: superseded
+superseded_by: HANDOFF-20261111-194322-corpus-index-rebuilt.md
 supersedes: null
 next: 确认 ws2 索引结果；决定是否做通用分章重跑
 ---

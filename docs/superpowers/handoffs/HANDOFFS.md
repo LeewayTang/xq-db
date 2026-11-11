@@ -4,4 +4,5 @@
 
 | id | file | created | trigger | status | next |
 |---|---|---|---|---|---|
-| 20261111-102545 | [HANDOFF-20261111-102545-p3-done-corpus-release.md](HANDOFF-20261111-102545-p3-done-corpus-release.md) | 2026-11-11T10:25:45+08:00 | manual | active | 确认 ws2 索引结果；决定是否做通用分章重跑 |
+| 20261111-194322 | [HANDOFF-20261111-194322-corpus-index-rebuilt.md](HANDOFF-20261111-194322-corpus-index-rebuilt.md) | 2026-11-11T19:43:22+08:00 | manual | active | 决定通用分章或开始小批量标注 |
+| 20261111-102545 | [HANDOFF-20261111-102545-p3-done-corpus-release.md](HANDOFF-20261111-102545-p3-done-corpus-release.md) | 2026-11-11T10:25:45+08:00 | manual | superseded | 确认 ws2 索引结果；决定是否做通用分章重跑 |
