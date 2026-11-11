@@ -125,6 +125,20 @@ def test_incremental_reindex_skips_unchanged_sections(tmp_path):
     assert search(conn, "公会戎于潜")
 
 
+def test_state_only_records_hashes_without_reindexing(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    _seed(conn)
+    rebuild_fts(conn, incremental=True)
+    conn.execute("delete from section_index_state")
+    conn.commit()
+
+    assert rebuild_fts(conn, state_only=True) == 1
+    assert search(conn, "郑伯克段")
+    assert conn.execute(
+        "select count(*) from section_index_state").fetchone()[0] == 1
+
+
 def test_search_returns_matching_passage_inside_section(tmp_path):
     conn = connect(tmp_path / "x.db")
     init_db(conn)

@@ -77,6 +77,8 @@ def build_parser() -> argparse.ArgumentParser:
         "index", parents=[common], help="重建全文索引")
     index_parser.add_argument("--full", action="store_true",
                               help="全量重建，默认只更新变化章节")
+    index_parser.add_argument("--state-only", action="store_true",
+                              help="只记录章节哈希，不重建索引")
 
     query = sub.add_parser("search", parents=[common], help="全文检索")
     query.add_argument("query")
@@ -370,7 +372,8 @@ def cmd_review(args) -> int:
 
 def cmd_index(args) -> int:
     _, conn = _connect(args)
-    count = rebuild_fts(conn, incremental=not args.full)
+    count = rebuild_fts(
+        conn, incremental=not args.full, state_only=args.state_only)
     conn.close()
     print(f"indexed {count} sections")
     return 0

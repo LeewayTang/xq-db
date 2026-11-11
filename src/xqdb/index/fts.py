@@ -42,7 +42,8 @@ def _iter_sections(conn):
 
 
 def rebuild_fts(conn, *, batch_size: int = 1000,
-                incremental: bool = False) -> int:
+                incremental: bool = False,
+                state_only: bool = False) -> int:
     """Index one row per section; passages are resolved after matching.
 
     With incremental=True, only sections whose text hash changed are
@@ -56,7 +57,8 @@ def rebuild_fts(conn, *, batch_size: int = 1000,
                 "select section_id, text_hash from section_index_state")
         }
     else:
-        conn.execute("delete from section_fts")
+        if not state_only:
+            conn.execute("delete from section_fts")
         conn.execute("delete from section_index_state")
         conn.commit()
         known = None
@@ -70,6 +72,18 @@ def rebuild_fts(conn, *, batch_size: int = 1000,
         seen.add(section_id)
         digest = hashlib.sha1(text.encode("utf-8")).hexdigest()
         if known is not None and known.get(section_id) == digest:
+            continue
+
+        if state_only:
+            conn.execute(
+                "insert into section_index_state"
+                "(section_id, text_hash, indexed_at) values (?, ?, ?) "
+                "on conflict(section_id) do update set "
+                "text_hash = excluded.text_hash, "
+                "indexed_at = excluded.indexed_at",
+                (section_id, digest, now),
+            )
+            count += 1
             continue
 
         if known is not None:
