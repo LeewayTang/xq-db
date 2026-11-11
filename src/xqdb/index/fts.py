@@ -24,21 +24,22 @@ def _write_batch(conn, batch: list[tuple[str, str]]) -> None:
 
 
 def _iter_sections(conn):
-    current: str | None = None
-    parts: list[str] = []
-    for row in conn.execute(
-            "select section_id, text_norm from passage "
-            "order by section_id, idx"):
-        sid = row["section_id"]
-        if sid != current:
-            if current is not None:
-                yield current, "\n".join(parts)
-            current = sid
-            parts = [row["text_norm"]]
-        else:
-            parts.append(row["text_norm"])
-    if current is not None:
-        yield current, "\n".join(parts)
+    """Yield section text without holding a read cursor across commits.
+
+    A single streaming cursor over 20M passages keeps a read snapshot open,
+    which prevents WAL checkpointing while batches are committed. Fetching
+    one section at a time releases the snapshot before each write.
+    """
+    section_ids = [
+        row["id"] for row in conn.execute("select id from section order by id")
+    ]
+    for section_id in section_ids:
+        rows = conn.execute(
+            "select text_norm from passage where section_id = ? order by idx",
+            (section_id,),
+        ).fetchall()
+        if rows:
+            yield section_id, "\n".join(row["text_norm"] for row in rows)
 
 
 def rebuild_fts(conn, *, batch_size: int = 1000,
