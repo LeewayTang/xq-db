@@ -97,8 +97,10 @@ def rebuild_index() -> None:
     lines = [
         "# Handoff 索引",
         "",
-        "按 `handoff_id` 倒序。由 `scripts/handoff.py` 自动重建；"
-        "`HANDOFF-LATEST.md` 指向当前 active 的那一份。",
+        (
+            "按 `handoff_id` 倒序。由 `scripts/handoff.py` 自动重建；"
+            "`HANDOFF-LATEST.md` 指向当前 active 的那一份。"
+        ),
         "",
         "| id | file | created | trigger | status | next |",
         "|---|---|---|---|---|---|",
