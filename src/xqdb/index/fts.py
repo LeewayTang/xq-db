@@ -15,9 +15,14 @@ class Hit:
     work_id: str = ""
 
 
-def _write_batch(conn, batch: list[tuple[str, str]]) -> None:
+CHUNK_CHARS = 100_000
+BATCH_CHARS = 2_000_000
+
+
+def _write_batch(conn, batch: list[tuple[str, str, str]]) -> None:
     conn.executemany(
-        "insert into section_fts(section_id, text_norm) values (?, ?)",
+        "insert into section_fts(chunk_key, section_id, text_norm) "
+        "values (?, ?, ?)",
         batch,
     )
     conn.commit()
@@ -67,7 +72,8 @@ def rebuild_fts(conn, *, batch_size: int = 1000,
     now = datetime.now(UTC).isoformat()
     count = 0
     seen: set[str] = set()
-    batch: list[tuple[str, str]] = []
+    batch: list[tuple[str, str, str]] = []
+    batch_chars = 0
 
     for section_id, text in _iter_sections(conn):
         seen.add(section_id)
@@ -90,7 +96,14 @@ def rebuild_fts(conn, *, batch_size: int = 1000,
         if known is not None:
             conn.execute(
                 "delete from section_fts where section_id = ?", (section_id,))
-        batch.append((section_id, text))
+        chunks = [
+            text[index:index + CHUNK_CHARS]
+            for index in range(0, len(text), CHUNK_CHARS)
+        ] or [""]
+        for index, chunk in enumerate(chunks):
+            batch.append(
+                (f"{section_id}#{index:03d}", section_id, chunk))
+            batch_chars += len(chunk)
         conn.execute(
             "insert into section_index_state"
             "(section_id, text_hash, indexed_at) values (?, ?, ?) "
@@ -99,9 +112,10 @@ def rebuild_fts(conn, *, batch_size: int = 1000,
             (section_id, digest, now),
         )
         count += 1
-        if len(batch) >= batch_size:
+        if len(batch) >= batch_size or batch_chars >= BATCH_CHARS:
             _write_batch(conn, batch)
             batch.clear()
+            batch_chars = 0
 
     if batch:
         _write_batch(conn, batch)

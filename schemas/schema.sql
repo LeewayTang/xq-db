@@ -293,4 +293,5 @@ CREATE TABLE IF NOT EXISTS section_index_state (
 );
 
 CREATE VIRTUAL TABLE IF NOT EXISTS section_fts
-    USING fts5(section_id UNINDEXED, text_norm, tokenize='trigram');
+    USING fts5(chunk_key UNINDEXED, section_id UNINDEXED, text_norm,
+               tokenize='trigram');

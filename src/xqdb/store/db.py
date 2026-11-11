@@ -26,6 +26,14 @@ def init_db(conn: sqlite3.Connection) -> None:
         conn.execute(
             "alter table event add column passage_id text "
             "references passage(id)")
+    fts_columns = {row[1] for row in conn.execute(
+        "pragma table_info(section_fts)")}
+    if fts_columns and "chunk_key" not in fts_columns:
+        conn.execute("drop table section_fts")
+        conn.execute(
+            "create virtual table section_fts using fts5("
+            "chunk_key unindexed, section_id unindexed, text_norm, "
+            "tokenize='trigram')")
     conn.execute(
         "INSERT OR IGNORE INTO index_meta(key, value) VALUES (?, ?)",
         ("schema_version", SCHEMA_VERSION),

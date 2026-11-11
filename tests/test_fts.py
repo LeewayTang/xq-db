@@ -139,6 +139,22 @@ def test_state_only_records_hashes_without_reindexing(tmp_path):
         "select count(*) from section_index_state").fetchone()[0] == 1
 
 
+def test_large_section_is_split_into_chunks(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    init_db(conn)
+    _seed(conn)
+    text = "甲" * 250_000
+    conn.execute(
+        "update passage set text = ?, text_norm = ?, char_count = ? "
+        "where id = 'p:z:1:001'", (text, text, len(text)))
+    conn.commit()
+
+    assert rebuild_fts(conn, incremental=True) == 1
+    assert conn.execute(
+        "select count(*) from section_fts").fetchone()[0] == 3
+    assert search(conn, "甲甲甲")[0].passage_id == "p:z:1:001"
+
+
 def test_search_returns_matching_passage_inside_section(tmp_path):
     conn = connect(tmp_path / "x.db")
     init_db(conn)
